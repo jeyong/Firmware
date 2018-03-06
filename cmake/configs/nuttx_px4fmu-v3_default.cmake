@@ -211,4 +211,7 @@ set(config_module_list
 
 	# Hardware test
 	examples/hwtest
+
+	# SpeedChecker test
+	examples/speedchecker
 )
