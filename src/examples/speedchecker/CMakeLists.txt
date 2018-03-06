@@ -33,7 +33,7 @@
 px4_add_module(
 	MODULE examples__speedchecker_app
 	MAIN px4_speedchecker_app
-	STACK_MAIN 2000
+	STACK_MAIN 1200
 	SRCS
 		px4_speedchecker_app.c
 	DEPENDS
