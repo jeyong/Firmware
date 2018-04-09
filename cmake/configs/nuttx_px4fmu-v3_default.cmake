@@ -215,4 +215,5 @@ set(config_module_list
 	# SpeedChecker test
 	examples/speedchecker
 	examples/speedchecker_subscriber
+	examples/speedchecker_subscriber2
 )
