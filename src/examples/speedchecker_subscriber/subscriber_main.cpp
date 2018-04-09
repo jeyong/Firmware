@@ -33,23 +33,125 @@
 
 /**
  * @file subscriber_main.cpp
- * Example subscriber for ros and px4
  *
- * @author Thomas Gubler <thomasgubler@gmail.com>
+ * @author Jeyong Shin <jeyong@subak.io>
  */
-#include "subscriber.h"
-bool thread_running = false;     /**< Deamon status flag */
+#include <px4_config.h>
+#include <unistd.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <systemlib/systemlib.h>
+#include <systemlib/param/param.h>
+#include <systemlib/err.h>
+#include <drivers/drv_hrt.h>
+#include <math.h>
 
-int main(int argc, char **argv)
+#include "subscriber.hpp"
+
+static bool thread_should_exit = false;     /**< Deamon exit flag */
+static bool thread_running = false;     /**< Deamon status flag */
+static int deamon_task;             /**< Handle of deamon task / thread */
+
+/**
+ * Deamon management function.
+ */
+extern "C" __EXPORT int speedchecker_subscriber_main(int argc, char *argv[]);
+
+/**
+ * Mainloop of deamon.
+ */
+int speedchecker_subscriber_thread_main(int argc, char *argv[]);
+
+/**
+ * Print the correct usage.
+ */
+static void usage(const char *reason);
+
+static void
+usage(const char *reason)
 {
-	px4::init(argc, argv, "subscriber");
+	if (reason) {
+		fprintf(stderr, "%s\n", reason);
+	}
 
-	PX4_INFO("starting");
-	SpeedCheckerSubscriber s;
+	fprintf(stderr, "usage: segway {start|stop|status} [-p <additional params>]\n\n");
+	exit(1);
+}
+
+/**
+ * The deamon app only briefly exists to start
+ * the background job. The stack size assigned in the
+ * Makefile does only apply to this management task.
+ *
+ * The actual stack size should be set in the call
+ * to task_create().
+ */
+int speedchecker_subscriber_main(int argc, char *argv[])
+{
+
+	if (argc < 2) {
+		usage("missing command");
+	}
+
+	if (!strcmp(argv[1], "start")) {
+
+		if (thread_running) {
+			warnx("already running");
+			/* this is not an error */
+			exit(0);
+		}
+
+		thread_should_exit = false;
+
+		deamon_task = px4_task_spawn_cmd("speedchecker_subscriber",
+						 SCHED_DEFAULT,
+						 SCHED_PRIORITY_MAX - 10,
+						 5120,
+						 speedchecker_subscriber_thread_main,
+						 (argv) ? (char *const *)&argv[2] : (char *const *)nullptr);
+		exit(0);
+	}
+
+	if (!strcmp(argv[1], "stop")) {
+		thread_should_exit = true;
+		exit(0);
+	}
+
+	if (!strcmp(argv[1], "status")) {
+		if (thread_running) {
+			warnx("is running");
+
+		} else {
+			warnx("not started");
+		}
+
+		exit(0);
+	}
+
+	usage("unrecognized command");
+	exit(1);
+}
+
+int speedchecker_subscriber_thread_main(int argc, char *argv[])
+{
+
+	warnx("starting");
+
+	using namespace control;
+
+	//SpeedCheckerSubscriber subscriber;
+	SpeedCheckerSubscriber subscriber(nullptr, "speedchecker_subscriber");
+
 	thread_running = true;
-	s.spin();
 
-	PX4_INFO("exiting.");
+	while (!thread_should_exit) {
+		subscriber.update();
+	}
+
+	warnx("exiting.");
+
 	thread_running = false;
+
 	return 0;
 }

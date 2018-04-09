@@ -36,7 +36,6 @@ px4_add_module(
 	STACK_MAIN 2400
 	SRCS
 		subscriber_main.cpp
-		subscriber_start_nuttx.cpp
 		subscriber.cpp
 	DEPENDS
 		platforms__common

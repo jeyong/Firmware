@@ -33,77 +33,52 @@
 
 /**
  * @file subscriber_example.cpp
- * Example subscriber for ros and px4
  *
- * @author Thomas Gubler <thomasgubler@gmail.com>
+ * @author Jeyong Shin <jeyong@subak.io>
  */
 
-#include "subscriber.h"
+#include <px4_posix.h>
+#include <controllib/blocks.hpp>
+#include "subscriber.hpp"
 
-using namespace px4;
-
-void speedchecker_info_function(const speedchecker_info_s &msg)
+/*
+SpeedCheckerSubscriber::SpeedCheckerSubscriber()
 {
-	//PX4_INFO("I heard: [%" PRIu64 "]", msg.data().timestamp_last_valid);
+	SpeedCheckerSubscriber(nullptr, "speedchecker_subscriber");
+}
+*/
+
+SpeedCheckerSubscriber::SpeedCheckerSubscriber(SuperBlock *parent, const char *name) :
+	SuperBlock(parent, name),
+	// subscriptions
+	_speedchecker_info(ORB_ID(speedchecker_info), 4, 0, &getSubscriptions()) //4ms
+{
+		_attPoll.fd = _speedchecker_info.getHandle();
+		_attPoll.events = POLLIN;
 }
 
-SpeedCheckerSubscriber::SpeedCheckerSubscriber() :
-	_n(_appState)
-	// ,
-	// _p_sub_interv("SUB_INTERV", PARAM_SUB_INTERV_DEFAULT),
-	// _p_test_float("SUB_TESTF", PARAM_SUB_TESTF_DEFAULT)
+void SpeedCheckerSubscriber::update()
 {
-	/* Read the parameter back as example */
-	// _p_sub_interv.update();
-	// _p_test_float.update();
-	// PX4_INFO("Param SUB_INTERV = %d", _p_sub_interv.get());
-	// PX4_INFO("Param SUB_TESTF = %.3f", (double)_p_test_float.get());
+		// wait for a sensor update, check for exit condition every 4 ms(250Hz)
+	if (px4_poll(&_attPoll, 1, 4) < 0) { return; } // poll error
 
-//	static speedchecker_info_s s;
-	/* Do some subscriptions */
-	/* Function */
-	_n.subscribe<speedchecker_info_s>(speedchecker_info_function, 1000);
+	uint64_t newTimeStamp = hrt_absolute_time();
+	float dt = (newTimeStamp - _timeStamp) / 1.0e6f;
+	_timeStamp = newTimeStamp;
 
-	/* No callback */
-	_sub_speedchecker_info = _n.subscribe<speedchecker_info_s>(500);
+	// check for sane values of dt
+	// to prevent large control responses
+	if (dt > 1.0f || dt < 0) { return; }
 
-	/* Class method */
+	// set dt for all child blocks
+	setDt(dt);
 
-	_n.subscribe<speedchecker_info_s>(&SpeedCheckerSubscriber::speedchecker_info_callback, this, 1000);
+	// check for new updates
+//	if (_param_update.updated()) { updateParams(); }
 
-	/* Another class method */
-//	_n.subscribe<px4_vehicle_attitude>(&SubscriberExample::vehicle_attitude_callback, this, 1000);
+	// get new information from subscriptions
+	updateSubscriptions();
 
-	/* Yet antoher class method */
-//	_n.subscribe<px4_parameter_update>(&SubscriberExample::parameter_update_callback, this, 1000);
+	_speedchecker_info.get().sequence;
 
-	PX4_INFO("subscribed");
 }
-
-/**
- * This tutorial demonstrates simple receipt of messages over the PX4 middleware system.
- * Also the current value of the _sub_rc_chan subscription is printed
- */
-void SpeedCheckerSubscriber::speedchecker_info_callback(const speedchecker_info_s &msg)
-{
-	// PX4_INFO("rc_channels_callback (method): [%" PRIu64 "]",
-	// 	 msg.data().timestamp_last_valid);
-	// PX4_INFO("rc_channels_callback (method): value of _sub_rc_chan: [%" PRIu64 "]",
-	// 	 _sub_rc_chan->data().timestamp_last_valid);
-}
-
-// void SubscriberExample::vehicle_attitude_callback(const px4_vehicle_attitude &msg)
-// {
-// 	PX4_INFO("vehicle_attitude_callback (method): [%" PRIu64 "]",
-// 		 msg.data().timestamp);
-// }
-
-// void SubscriberExample::parameter_update_callback(const px4_parameter_update &msg)
-// {
-// 	PX4_INFO("parameter_update_callback (method): [%" PRIu64 "]",
-// 		 msg.data().timestamp);
-// 	_p_sub_interv.update();
-// 	PX4_INFO("Param SUB_INTERV = %d", _p_sub_interv.get());
-// 	_p_test_float.update();
-// 	PX4_INFO("Param SUB_TESTF = %.3f", (double)_p_test_float.get());
-// }

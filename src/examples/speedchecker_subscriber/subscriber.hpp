@@ -32,68 +32,40 @@
  ****************************************************************************/
 
 /**
- * @file subscriber_start_nuttx.cpp
+ * @file subscriber.h
  *
- * @author Thomas Gubler <thomasgubler@gmail.com>
+ * @author Jeyong Shin <jeyong@subak.io>
  */
+#pragma once
+
+#include <px4_posix.h>
+
+#include <math.h>
+#include <poll.h>
+#include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
-#include <cstdlib>
-#include <systemlib/err.h>
-#include <systemlib/systemlib.h>
 
-extern bool thread_running;
-int daemon_task;             /**< Handle of deamon task / thread */
-namespace px4
+#include <controllib/blocks.hpp>
+#include <drivers/drv_hrt.h>
+
+#include <uORB/topics/speedchecker_info.h>
+#include <uORB/Subscription.hpp>
+
+
+class SpeedCheckerSubscriber : public control::SuperBlock
 {
-bool task_should_exit = false;
-}
-using namespace px4;
+protected:
+	// subscriptions
+	uORB::Subscription<speedchecker_info_s> _speedchecker_info;
 
-extern int main(int argc, char **argv);
+public:
+	SpeedCheckerSubscriber();
+	SpeedCheckerSubscriber(SuperBlock *parent, const char *name);
+	virtual ~SpeedCheckerSubscriber() = default;
+	void update();
 
-extern "C" __EXPORT int subscriber_main(int argc, char *argv[]);
-int subscriber_main(int argc, char *argv[])
-{
-	if (argc < 2) {
-		errx(1, "usage: subscriber {start|stop|status}");
-	}
-
-	if (!strcmp(argv[1], "start")) {
-
-		if (thread_running) {
-			warnx("already running");
-			/* this is not an error */
-			exit(0);
-		}
-
-		task_should_exit = false;
-
-		daemon_task = px4_task_spawn_cmd("subscriber",
-						 SCHED_DEFAULT,
-						 SCHED_PRIORITY_MAX - 5,
-						 2000,
-						 main,
-						 (argv) ? (char *const *)&argv[2] : (char *const *)nullptr);
-
-		exit(0);
-	}
-
-	if (!strcmp(argv[1], "stop")) {
-		task_should_exit = true;
-		exit(0);
-	}
-
-	if (!strcmp(argv[1], "status")) {
-		if (thread_running) {
-			warnx("is running");
-
-		} else {
-			warnx("not started");
-		}
-
-		exit(0);
-	}
-
-	warnx("unrecognized command");
-	return 1;
-}
+private:
+	px4_pollfd_struct_t _attPoll;
+	uint64_t _timeStamp;
+};
