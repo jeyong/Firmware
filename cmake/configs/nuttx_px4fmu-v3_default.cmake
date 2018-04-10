@@ -213,7 +213,9 @@ set(config_module_list
 	examples/hwtest
 
 	# SpeedChecker test
+
 	examples/speedchecker
-	examples/speedchecker_subscriber
-	examples/speedchecker_subscriber2
+
+#	examples/speedchecker_subscriber
+#	examples/speedchecker_subscriber2
 )
