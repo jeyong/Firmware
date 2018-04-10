@@ -62,12 +62,12 @@ static int daemon_task;				/**< Handle of daemon task / thread */
 /**
  * daemon management function.
  */
-__EXPORT int px4_speedchecker_app_main(int argc, char *argv[]);
+__EXPORT int speedchecker_main(int argc, char *argv[]);
 
 /**
  * Mainloop of daemon.
  */
-int px4_speedchecker_thread_main(int argc, char *argv[]);
+int speedchecker_thread_main(int argc, char *argv[]);
 
 
 /**
@@ -86,7 +86,7 @@ usage(const char *reason)
 }
 
 
-int px4_speedchecker_app_main(int argc, char *argv[])
+int speedchecker_main(int argc, char *argv[])
 {
 	if (argc < 2) {
 		usage("missing command");
@@ -106,7 +106,7 @@ int px4_speedchecker_app_main(int argc, char *argv[])
 						 SCHED_DEFAULT,
 						 SCHED_PRIORITY_250HZ-5,
 						 2000,
-						 px4_speedchecker_thread_main,
+						 speedchecker_thread_main,
 						 (argv) ? (char *const *)&argv[2] : (char *const *)NULL);
 		return 0;
 	}
@@ -131,14 +131,24 @@ int px4_speedchecker_app_main(int argc, char *argv[])
 	return 1;
 }
 
-int px4_speedchecker_thread_main(int argc, char *argv[])
+int speedchecker_thread_main(int argc, char *argv[])
 {
 	warnx("[speedchecker] starting\n");
 
+	struct speedchecker_info_s s_info;
+	memset(&s_info, 0, sizeof(s_info));
+
 	thread_running = true;
 
+	orb_advert_t speedchecker_pub = orb_advertise(ORB_ID(speedchecker_info), &s_info);
+
+	warnx("Hello speedchecker!\n");
+		
 	while (!thread_should_exit) {
-		warnx("Hello speedchecker!\n");
+		warnx("Speedcheck_Info Sequence : %d", s_info.sequence);
+
+		orb_publish(ORB_ID(speedchecker_info), speedchecker_pub, &s_info);
+		s_info.sequence++;
 		sleep(10);
 	}
 

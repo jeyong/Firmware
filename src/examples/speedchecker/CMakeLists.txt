@@ -31,8 +31,8 @@
 #
 ############################################################################
 px4_add_module(
-	MODULE examples__speedchecker_app
-	MAIN px4_speedchecker_app
+	MODULE examples__speedchecker
+	MAIN speedchecker
 	STACK_MAIN 1200
 	SRCS
 		px4_speedchecker_app.c
