@@ -145,11 +145,11 @@ int speedchecker_thread_main(int argc, char *argv[])
 	warnx("Hello speedchecker!\n");
 		
 	while (!thread_should_exit) {
-		warnx("Speedcheck_Info Sequence : %d", s_info.sequence);
+		//warnx("Speedcheck_Info Sequence : %d", s_info.sequence);
 
 		orb_publish(ORB_ID(speedchecker_info), speedchecker_pub, &s_info);
 		s_info.sequence++;
-		sleep(10);
+//		sleep(5);
 	}
 
 	warnx("[speedchecker] exiting.\n");
