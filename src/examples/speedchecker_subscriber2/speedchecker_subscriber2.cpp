@@ -51,6 +51,9 @@
 #include <poll.h>
 #include <time.h>
 #include <sys/ioctl.h>
+#include <systemlib/err.h>
+#include <systemlib/systemlib.h>
+
 #include <drivers/device/device.h>
 #include <drivers/drv_hrt.h>
 #include <arch/board/board.h>
@@ -201,7 +204,7 @@ SpeedcheckerSubscriber2::task_main()
 	struct pollfd fds[1];
 
 	// Setup of loop
-	fds[0].fd = _command_sub;
+	fds[0].fd = speedchecker_sub;
 	fds[0].events = POLLIN;
 
 
@@ -225,6 +228,9 @@ SpeedcheckerSubscriber2::task_main()
 		orb_check(speedchecker_sub, &updated);
 		if(updated) {
 			orb_copy(ORB_ID(speedchecker_info), speedchecker_sub, &_speedchecker_info);
+			if ( _speedchecker_info.sequence % 5 ==0) {
+				warnx("Receiver Speedcheck_Info Sequence : %d", _speedchecker_info.sequence);
+			}
 			//Do Something
 		}
 
@@ -240,6 +246,9 @@ SpeedcheckerSubscriber2::task_main()
 			if(updated) {
 				orb_copy(ORB_ID(speedchecker_info), speedchecker_sub, &_speedchecker_info);
 				//Do Something
+				if ( _speedchecker_info.sequence % 5 ==0) {
+					warnx("Receiver Speedcheck_Info Sequence : %d", _speedchecker_info.sequence);
+				}
 			}
 			
 //			counter++;
