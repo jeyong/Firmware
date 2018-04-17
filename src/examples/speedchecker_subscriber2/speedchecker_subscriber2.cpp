@@ -208,6 +208,7 @@ SpeedcheckerSubscriber2::task_main()
 	fds[0].events = POLLIN;
 
 
+	uint32_t prev_seq = 0;
 	while (!_task_should_exit) {
 
 		/* wait for up to 100ms for data */
@@ -228,13 +229,21 @@ SpeedcheckerSubscriber2::task_main()
 		orb_check(speedchecker_sub, &updated);
 		if(updated) {
 			orb_copy(ORB_ID(speedchecker_info), speedchecker_sub, &_speedchecker_info);
-			if ( _speedchecker_info.sequence % 5 ==0) {
-				warnx("Receiver Speedcheck_Info Sequence : %d", _speedchecker_info.sequence);
+			if (_speedchecker_info.sequence == (prev_seq+1)) 
+			{
+				prev_seq++;
 			}
+			else {
+				warnx("Receiver Speedcheck_Info Sequence = expected : %d, but now : %d", (prev_seq+1), _speedchecker_info.sequence);
+				prev_seq = _speedchecker_info.sequence;
+			}
+			// if ( _speedchecker_info.sequence % 5 ==0) {
+			// 	warnx("Receiver Speedcheck_Info Sequence : %d", _speedchecker_info.sequence);
+			// }
 			//Do Something
 		}
 
-		const unsigned sleeptime_us = 3500;
+		const unsigned sleeptime_us = 2000;
 
 		hrt_abstime last_run = hrt_absolute_time();
 		float dt_runs = sleeptime_us / 1e6f;
@@ -242,12 +251,17 @@ SpeedcheckerSubscriber2::task_main()
 		// switch to faster updates during the drop
 		while (true) {
 
+
 			orb_check(speedchecker_sub, &updated);
 			if(updated) {
 				orb_copy(ORB_ID(speedchecker_info), speedchecker_sub, &_speedchecker_info);
-				//Do Something
-				if ( _speedchecker_info.sequence % 5 ==0) {
-					warnx("Receiver Speedcheck_Info Sequence : %d", _speedchecker_info.sequence);
+				if (_speedchecker_info.sequence == (prev_seq+1)) 
+				{
+					prev_seq++;
+				}
+				else {
+					warnx("Receiver Speedcheck_Info Sequence = expected : %d, but now : %d", (prev_seq+1), _speedchecker_info.sequence);
+					prev_seq = _speedchecker_info.sequence;
 				}
 			}
 			
