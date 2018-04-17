@@ -407,14 +407,14 @@ then
 		sensors start -h
 		commander start --hil
 	else
-		if ver hwcmp PX4_SAME70XPLAINED_V1
-		then
-			gps start -d /dev/ttyS2
-		else
-			gps start
-		fi
-		sh /etc/init.d/rc.sensors
-		commander start
+#		if ver hwcmp PX4_SAME70XPLAINED_V1
+#		then
+#			gps start -d /dev/ttyS2
+#		else
+#			gps start
+#		fi
+#		sh /etc/init.d/rc.sensors
+#		commander start
 	fi
 
 	send_event start
@@ -826,7 +826,7 @@ then
 		sh /etc/init.d/rc.interface
 
 		# Start standard multicopter apps
-		sh /etc/init.d/rc.mc_apps
+#		sh /etc/init.d/rc.mc_apps   //for speedchecker
 	fi
 
 	#
@@ -945,7 +945,7 @@ then
 	#
 	# Start the navigator
 	#
-	navigator start
+#	navigator start
 
 	#
 	# Generic setup (autostart ID not found)
@@ -953,7 +953,7 @@ then
 	if [ $VEHICLE_TYPE == none ]
 	then
 		echo "No autostart ID found"
-		ekf2 start
+#		ekf2 start
 	fi
 
 	# Start any custom addons

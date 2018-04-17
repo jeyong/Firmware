@@ -20,7 +20,7 @@
 # @maintainer Lorenz Meier <lorenz@px4.io>
 #
 
-sh /etc/init.d/rc.mc_defaults
+# sh /etc/init.d/rc.mc_defaults  //speedchecker
 
 set MIXER quad_x
 
