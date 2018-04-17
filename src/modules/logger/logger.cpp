@@ -576,7 +576,7 @@ void Logger::add_default_topics()
 	add_topic("vehicle_global_position_groundtruth", 100);
 	add_topic("vehicle_local_position_groundtruth", 100);
 #endif
-
+	return;
 	// Note: try to avoid setting the interval where possible, as it increases RAM usage
 	add_topic("actuator_controls_0", 100);
 	add_topic("actuator_controls_1", 100);
@@ -623,16 +623,20 @@ void Logger::add_default_topics()
 void Logger::add_high_rate_topics()
 {
 	// maximum rate to analyze fast maneuvers (e.g. for racing)
-	add_topic("actuator_controls_0");
-	add_topic("actuator_outputs");
-	add_topic("manual_control_setpoint");
-	add_topic("vehicle_attitude");
-	add_topic("vehicle_attitude_setpoint");
-	add_topic("vehicle_rates_setpoint");
+	add_topic("speedchecker_info");
+	PX4_WARN("speedchecker_info added!");
+	
+	// add_topic("actuator_controls_0");
+	// add_topic("actuator_outputs");
+	// add_topic("manual_control_setpoint");
+	// add_topic("vehicle_attitude");
+	// add_topic("vehicle_attitude_setpoint");
+	// add_topic("vehicle_rates_setpoint");
 }
 
 void Logger::add_debug_topics()
 {
+	return;
 	add_topic("debug_key_value");
 	add_topic("debug_value");
 	add_topic("debug_vect");
@@ -640,6 +644,7 @@ void Logger::add_debug_topics()
 
 void Logger::add_estimator_replay_topics()
 {
+	return;
 	// for estimator replay (need to be at full rate)
 	add_topic("ekf2_timestamps");
 
@@ -659,6 +664,7 @@ void Logger::add_estimator_replay_topics()
 
 void Logger::add_thermal_calibration_topics()
 {
+	return;
 	add_topic("sensor_accel", 100);
 	add_topic("sensor_baro", 100);
 	add_topic("sensor_gyro", 100);
@@ -666,6 +672,7 @@ void Logger::add_thermal_calibration_topics()
 
 void Logger::add_sensor_comparison_topics()
 {
+	return;
 	add_topic("sensor_accel", 100);
 	add_topic("sensor_baro", 100);
 	add_topic("sensor_gyro", 100);
@@ -674,6 +681,7 @@ void Logger::add_sensor_comparison_topics()
 
 void Logger::add_system_identification_topics()
 {
+	return;
 	// for system id need to log imu and controls at full rate
 	add_topic("actuator_controls_0");
 	add_topic("actuator_controls_1");
