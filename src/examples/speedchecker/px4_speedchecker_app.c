@@ -135,21 +135,21 @@ int speedchecker_thread_main(int argc, char *argv[])
 {
 	warnx("[speedchecker] starting\n");
 
-	struct speedchecker_info_s s_info;
-	memset(&s_info, 0, sizeof(s_info));
+	struct speedchecker_info_s speed_info;
+	memset(&speed_info, 0, sizeof(speed_info));
+	orb_advert_t speed_info_pub = orb_advertise(ORB_ID(speedchecker_info), &speed_info);
 
 	thread_running = true;
 
-	orb_advert_t speedchecker_pub = orb_advertise(ORB_ID(speedchecker_info), &s_info);
-
 	warnx("Hello speedchecker!\n");
-		
-	while (!thread_should_exit) {
-		//warnx("Speedcheck_Info Sequence : %d", s_info.sequence);
 
-		orb_publish(ORB_ID(speedchecker_info), speedchecker_pub, &s_info);
-		s_info.sequence++;
-//		sleep(5);
+	while (!thread_should_exit) {
+		
+		speed_info.sequence++;
+		
+		orb_publish(ORB_ID(speedchecker_info), speed_info_pub, &speed_info);
+		speed_info.sequence = speed_info.sequence % 10000;
+		usleep(4000);
 	}
 
 	warnx("[speedchecker] exiting.\n");
