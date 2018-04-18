@@ -212,7 +212,7 @@ SpeedcheckerSubscriber2::task_main()
 	while (!_task_should_exit) {
 
 		/* wait for up to 100ms for data */
-		int pret = poll(&fds[0], (sizeof(fds) / sizeof(fds[0])), 50);
+		int pret = poll(&fds[0], (sizeof(fds) / sizeof(fds[0])), 10);
 
 		/* this is undesirable but not much we can do - might want to flag unhappy status */
 		if (pret < 0) {
@@ -243,7 +243,7 @@ SpeedcheckerSubscriber2::task_main()
 			//Do Something
 		}
 
-		const unsigned sleeptime_us = 2000;
+		const unsigned sleeptime_us = 1000;
 
 		hrt_abstime last_run = hrt_absolute_time();
 		float dt_runs = sleeptime_us / 1e6f;
