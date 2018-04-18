@@ -52,6 +52,7 @@
 
 #include <uORB/uORB.h>
 #include <uORB/topics/speedchecker_info.h>
+#include <drivers/drv_hrt.h>
 
 #define SCHED_PRIORITY_250HZ SCHED_PRIORITY_MAX-5
 
@@ -143,13 +144,27 @@ int speedchecker_thread_main(int argc, char *argv[])
 
 	warnx("Hello speedchecker!\n");
 
+	hrt_abstime last_run = hrt_absolute_time();
+	double freq = 0;
+	double dt = 0;
+	int count = 0;
 	while (!thread_should_exit) {
 		
 		speed_info.sequence++;
 		
 		orb_publish(ORB_ID(speedchecker_info), speed_info_pub, &speed_info);
-		speed_info.sequence = speed_info.sequence % 10000;
-		usleep(4000);
+		speed_info.sequence = speed_info.sequence % 1000;
+		if (speed_info.sequence == 0)
+		{
+			count++;
+			dt = (double) (hrt_absolute_time()-last_run) / 1000000.0;
+			freq = (double) (1000 / dt);
+
+			warnx("About %1.2f freq/sec(Hz), deltat = %4.2f, running time : %d sec ", freq, dt, (count*4));
+
+			last_run = hrt_absolute_time();
+		}
+		usleep(3000);
 	}
 
 	warnx("[speedchecker] exiting.\n");
