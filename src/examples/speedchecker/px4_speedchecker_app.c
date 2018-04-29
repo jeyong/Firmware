@@ -138,6 +138,10 @@ int speedchecker_thread_main(int argc, char *argv[])
 
 	struct speedchecker_info_s speed_info;
 	memset(&speed_info, 0, sizeof(speed_info));
+	for(int i=0; i<88; i++)
+	{
+		speed_info.dummy_data[i] = i;
+	}
 	orb_advert_t speed_info_pub = orb_advertise(ORB_ID(speedchecker_info), &speed_info);
 
 	thread_running = true;
@@ -145,14 +149,17 @@ int speedchecker_thread_main(int argc, char *argv[])
 	warnx("Hello speedchecker!\n");
 
 	hrt_abstime last_run = hrt_absolute_time();
+	
+
 	double freq = 0;
 	double dt = 0;
 	int count = 0;
 	while (!thread_should_exit) {
 		
 		speed_info.sequence++;
-		
+		speed_info.curtime = hrt_absolute_time();
 		orb_publish(ORB_ID(speedchecker_info), speed_info_pub, &speed_info);
+
 		speed_info.sequence = speed_info.sequence % 1000;
 		if (speed_info.sequence == 0)
 		{
