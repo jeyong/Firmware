@@ -1,7 +1,7 @@
 
 import matplotlib.pyplot as plt 
 import csv 
-with open('../250Hz/log0011_speedchecker_info_0.csv') as csvfile:
+with open('../250Hz_old/log0004_speedchecker_info_0.csv') as csvfile:
 
     reader = csv.DictReader(csvfile)
     isstart = False 
@@ -16,7 +16,11 @@ with open('../250Hz/log0011_speedchecker_info_0.csv') as csvfile:
                 isstart = True
                 count = 1
         elif isstart == True:
-            y.append(cur_seq - (prev_seq%1000) - 1)
+            if (prev_seq%1000) > cur_seq :
+                y.append(cur_seq + (1000 - (prev_seq%1000)) - 1)
+                print("cur_seq : "+str(cur_seq) + "prev_seq : " + str(prev_seq))
+            else :
+                y.append(cur_seq - (prev_seq%1000) - 1)
             x.append(count)
             count = count + 1
             if count > (250 * 60 * 30): #250Hz * 60 (sec) * 30 min
