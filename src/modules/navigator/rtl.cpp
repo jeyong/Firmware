@@ -72,6 +72,7 @@ RTL::rtl_type() const
 void
 RTL::on_activation()
 {
+	// 이미 착륙한 상태면 RTL_STATE_LANDED 상태로 설정
 	if (_navigator->get_land_detected()->landed) {
 		// for safety reasons don't go into RTL if landed
 		_rtl_state = RTL_STATE_LANDED;
@@ -81,7 +82,7 @@ RTL::on_activation()
 
 	} else if ((_navigator->get_global_position()->alt < _navigator->get_home_position()->alt + _param_return_alt.get())
 		   || _rtl_alt_min) {
-
+		// RTL 고도보다 낮은 경우에 일단 RTL 고도까지 올라간다.
 		// if lower than return altitude, climb up first
 		// if rtl_alt_min is true then forcing altitude change even if above
 		_rtl_state = RTL_STATE_CLIMB;
@@ -109,15 +110,17 @@ RTL::set_return_alt_min(bool min)
 	_rtl_alt_min = min;
 }
 
+// RTL_LAND
 void
 RTL::set_rtl_item()
 {
 	// RTL_TYPE: mission landing
 	// landing using planned mission landing, fly to DO_LAND_START instead of returning HOME
 	// do nothing, let navigator takeover with mission landing
+	// DO_LAND_START와 같이 Mission으로 실행하는 경우 그냥 return 
 	if (rtl_type() == RTL_LAND) {
 		if (_rtl_state > RTL_STATE_CLIMB) {
-			if (_navigator->start_mission_landing()) {
+			if (_navigator->start_mission_landing()) {  // mission으로 착륙하는 경우 동작 안함. (navigator에서 처리.)
 				mavlink_and_console_log_info(_navigator->get_mavlink_log_pub(), "RTL: using mission landing");
 				return;
 
@@ -135,27 +138,32 @@ RTL::set_rtl_item()
 
 	position_setpoint_triplet_s *pos_sp_triplet = _navigator->get_position_setpoint_triplet();
 
+	// 현재 위치와 home과의 거리 구하기
 	// check if we are pretty close to home already
 	const float home_dist = get_distance_to_next_waypoint(home.lat, home.lon, gpos.lat, gpos.lon);
 
+	// return시 고도 계산
 	// compute the return altitude
 	float return_alt = max(home.alt + _param_return_alt.get(), gpos.alt);
 
+	// home과 충분히 가까운 경우 : 최소 return 고도로 설정
 	// we are close to home, limit climb to min
 	if (home_dist < _param_rtl_min_dist.get()) {
 		return_alt = home.alt + _param_descend_alt.get();
 	}
 
+	// loiter 고도 계산
 	// compute the loiter altitude
 	const float loiter_altitude = min(home.alt + _param_descend_alt.get(), gpos.alt);
 
+	// 아래 각 state에서 사용하는 변수값을 사전에 다 계산하고 아래 상태에 따라 mission item 설정.
 	switch (_rtl_state) {
 	case RTL_STATE_CLIMB: {
 
 			_mission_item.nav_cmd = NAV_CMD_WAYPOINT;
 			_mission_item.lat = gpos.lat;
 			_mission_item.lon = gpos.lon;
-			_mission_item.altitude = return_alt;
+			_mission_item.altitude = return_alt; // RTL을 위해서 올라가는 고도
 			_mission_item.altitude_is_relative = false;
 			_mission_item.yaw = NAN;
 			_mission_item.acceptance_radius = _navigator->get_acceptance_radius();
@@ -169,7 +177,7 @@ RTL::set_rtl_item()
 		}
 
 	case RTL_STATE_RETURN: {
-
+			// 이전 상태 대비 고도는 바꾸지 않고 lat, lon만 home 위치로 설정
 			// don't change altitude
 			_mission_item.nav_cmd = NAV_CMD_WAYPOINT;
 			_mission_item.lat = home.lat;
@@ -177,12 +185,13 @@ RTL::set_rtl_item()
 			_mission_item.altitude = return_alt;
 			_mission_item.altitude_is_relative = false;
 
+			// home이랑 충분히 가까운 위치라면 yaw만 home yaw로 설정.
 			// use home yaw if close to home
 			/* check if we are pretty close to home already */
 			if (home_dist < _param_rtl_min_dist.get()) {
 				_mission_item.yaw = home.yaw;
 
-			} else {
+			} else { // home이랑 떨어져 있다면 현재 위치와 home 위치를 이용해서 yaw를 계산
 				// use current heading to home
 				_mission_item.yaw = get_bearing_to_next_waypoint(gpos.lat, gpos.lon, home.lat, home.lon);
 			}
@@ -197,7 +206,7 @@ RTL::set_rtl_item()
 
 			break;
 		}
-
+	//VTOL 무시
 	case RTL_STATE_TRANSITION_TO_MC: {
 			set_vtol_transition_item(&_mission_item, vtol_vehicle_status_s::VEHICLE_VTOL_STATE_MC);
 			break;
@@ -207,17 +216,18 @@ RTL::set_rtl_item()
 			_mission_item.nav_cmd = NAV_CMD_WAYPOINT;
 			_mission_item.lat = home.lat;
 			_mission_item.lon = home.lon;
-			_mission_item.altitude = loiter_altitude;
+			_mission_item.altitude = loiter_altitude;  // 고도를 loiter 고도로 설정
 			_mission_item.altitude_is_relative = false;
 
 			// except for vtol which might be still off here and should point towards this location
+			// VTOL인 경우 무시
 			const float d_current = get_distance_to_next_waypoint(gpos.lat, gpos.lon, _mission_item.lat, _mission_item.lon);
 
 			if (_navigator->get_vstatus()->is_vtol && (d_current > _navigator->get_acceptance_radius())) {
 				_mission_item.yaw = get_bearing_to_next_waypoint(gpos.lat, gpos.lon, _mission_item.lat, _mission_item.lon);
 
 			} else {
-				_mission_item.yaw = home.yaw;
+				_mission_item.yaw = home.yaw;  //home yaw로 설정
 			}
 
 			_mission_item.acceptance_radius = _navigator->get_acceptance_radius();
@@ -234,12 +244,13 @@ RTL::set_rtl_item()
 		}
 
 	case RTL_STATE_LOITER: {
+			// descend 고도에서 대기하는 시간이 더 크면 
 			const bool autoland = (_param_land_delay.get() > FLT_EPSILON);
 
 			// don't change altitude
 			_mission_item.lat = home.lat;
 			_mission_item.lon = home.lon;
-			_mission_item.altitude = loiter_altitude;
+			_mission_item.altitude = loiter_altitude; //loiter 고도로 설정
 			_mission_item.altitude_is_relative = false;
 			_mission_item.yaw = home.yaw;
 			_mission_item.loiter_radius = _navigator->get_loiter_radius();
@@ -250,12 +261,13 @@ RTL::set_rtl_item()
 
 			_navigator->set_can_loiter_at_sp(true);
 
+			// loiter 시간이 설정되어 있는 경우 해당 시간까지 loiter 하도록 설정
 			if (autoland && (get_time_inside(_mission_item) > FLT_EPSILON)) {
 				_mission_item.nav_cmd = NAV_CMD_LOITER_TIME_LIMIT;
 				mavlink_and_console_log_info(_navigator->get_mavlink_log_pub(), "RTL: loiter %.1fs",
 							     (double)get_time_inside(_mission_item));
 
-			} else {
+			} else {  // loiter 시간이 설정되어 있지 않은 경우 
 				_mission_item.nav_cmd = NAV_CMD_LOITER_UNLIMITED;
 				mavlink_and_console_log_info(_navigator->get_mavlink_log_pub(), "RTL: completed, loitering");
 			}
@@ -269,7 +281,7 @@ RTL::set_rtl_item()
 			_mission_item.lat = home.lat;
 			_mission_item.lon = home.lon;
 			_mission_item.yaw = home.yaw;
-			_mission_item.altitude = home.alt;
+			_mission_item.altitude = home.alt;  // home 고도로 고도 설정하여 착륙하도록 
 			_mission_item.altitude_is_relative = false;
 			_mission_item.acceptance_radius = _navigator->get_acceptance_radius();
 			_mission_item.time_inside = 0.0f;
@@ -280,7 +292,7 @@ RTL::set_rtl_item()
 			break;
 		}
 
-	case RTL_STATE_LANDED: {
+	case RTL_STATE_LANDED: { //착륙한 상태로 idle 상태로 설정
 			set_idle_item(&_mission_item);
 			set_return_alt_min(false);
 			break;
@@ -305,6 +317,7 @@ RTL::set_rtl_item()
 	}
 }
 
+// RTL state diagram 확인
 void
 RTL::advance_rtl()
 {
@@ -315,7 +328,7 @@ RTL::advance_rtl()
 
 	case RTL_STATE_RETURN:
 		_rtl_state = RTL_STATE_DESCEND;
-
+		// VTOL 경우 무시
 		if (_navigator->get_vstatus()->is_vtol && !_navigator->get_vstatus()->is_rotary_wing) {
 			_rtl_state = RTL_STATE_TRANSITION_TO_MC;
 		}
@@ -328,6 +341,7 @@ RTL::advance_rtl()
 
 	case RTL_STATE_DESCEND:
 
+		// descend 고도에서 대기하는 시간
 		/* only go to land if autoland is enabled */
 		if (_param_land_delay.get() < -DELAY_SIGMA || _param_land_delay.get() > DELAY_SIGMA) {
 			_rtl_state = RTL_STATE_LOITER;

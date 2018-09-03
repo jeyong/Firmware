@@ -70,11 +70,13 @@ public:
 
 private:
 	/**
+	 * RTL State 기준으로 mission item 설정
 	 * Set the RTL item
 	 */
 	void		set_rtl_item();
 
 	/**
+	 * RLT state 이동
 	 * Move to next RTL item
 	 */
 	void		advance_rtl();

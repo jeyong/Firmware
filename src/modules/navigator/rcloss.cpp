@@ -86,6 +86,7 @@ RCLoss::on_active()
 	}
 }
 
+// 
 void
 RCLoss::set_rcl_item()
 {
@@ -98,13 +99,13 @@ RCLoss::set_rcl_item()
 	case RCL_STATE_LOITER: {
 			_mission_item.lat = _navigator->get_global_position()->lat;
 			_mission_item.lon = _navigator->get_global_position()->lon;
-			_mission_item.altitude = _navigator->get_global_position()->alt;
+			_mission_item.altitude = _navigator->get_global_position()->alt;  // loiter의 고도는 현재 고도로 설정
 			_mission_item.altitude_is_relative = false;
 			_mission_item.yaw = NAN;
 			_mission_item.loiter_radius = _navigator->get_loiter_radius();
 			_mission_item.nav_cmd = NAV_CMD_LOITER_TIME_LIMIT;
 			_mission_item.acceptance_radius = _navigator->get_acceptance_radius();
-			_mission_item.time_inside = _param_loitertime.get() < 0.0f ? 0.0f : _param_loitertime.get();
+			_mission_item.time_inside = _param_loitertime.get() < 0.0f ? 0.0f : _param_loitertime.get(); //loiter 시간을 설정
 			_mission_item.autocontinue = true;
 			_mission_item.origin = ORIGIN_ONBOARD;
 
@@ -112,7 +113,7 @@ RCLoss::set_rcl_item()
 			break;
 		}
 
-	case RCL_STATE_TERMINATE: {
+	case RCL_STATE_TERMINATE: { // 비행 종료 요청. 모든 ps의 valid를 false로 설정
 			/* Request flight termination from the commander */
 			_navigator->get_mission_result()->flight_termination = true;
 			_navigator->set_mission_result_updated();
@@ -129,6 +130,7 @@ RCLoss::set_rcl_item()
 
 	reset_mission_item_reached();
 
+	// 설정한 mission item으로 sp 설정
 	/* convert mission item to current position setpoint and make it valid */
 	mission_apply_limitation(_mission_item);
 	mission_item_to_position_setpoint(_mission_item, &pos_sp_triplet->current);
@@ -141,7 +143,7 @@ void
 RCLoss::advance_rcl()
 {
 	switch (_rcl_state) {
-	case RCL_STATE_NONE:
+	case RCL_STATE_NONE: // loiter 시간이 설정되어 있으면 loiter 모드로 해당 시간동안 loiter, 그렇지 않은 경우 terminate 상태로 설정
 		if (_param_loitertime.get() > 0.0f) {
 			warnx("RC loss, OBC mode, loiter");
 			mavlink_log_critical(_navigator->get_mavlink_log_pub(), "rc loss, loitering");
@@ -158,7 +160,7 @@ RCLoss::advance_rcl()
 
 		break;
 
-	case RCL_STATE_LOITER:
+	case RCL_STATE_LOITER:  //loiter 모드로 설정 시간동안 동작
 		_rcl_state = RCL_STATE_TERMINATE;
 		warnx("time is up, no RC regain, terminating");
 		mavlink_log_critical(_navigator->get_mavlink_log_pub(), "RC not regained, terminating");
@@ -167,7 +169,7 @@ RCLoss::advance_rcl()
 		reset_mission_item_reached();
 		break;
 
-	case RCL_STATE_TERMINATE:
+	case RCL_STATE_TERMINATE:  //rc loss 자동 모드 종료
 		warnx("rcl end");
 		_rcl_state = RCL_STATE_END;
 		break;

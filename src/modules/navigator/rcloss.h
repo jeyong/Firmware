@@ -69,11 +69,13 @@ private:
 	} _rcl_state{RCL_STATE_NONE};
 
 	/**
+	 * RCL state에 따라 mission item 설정
 	 * Set the RCL item
 	 */
 	void		set_rcl_item();
 
 	/**
+	 * 다음 RCL State로 전환
 	 * Move to next RCL item
 	 */
 	void		advance_rcl();
