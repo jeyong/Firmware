@@ -50,17 +50,17 @@
 
 enum class PrecLandState {
 	Start, // Starting state
-	HorizontalApproach, // Positioning over landing target while maintaining altitude
-	DescendAboveTarget, // Stay over landing target while descending
-	FinalApproach, // Final landing approach, even without landing target
-	Search, // Search for landing target
-	Fallback, // Fallback landing method
-	Done // Done landing
+	HorizontalApproach, // Positioning over landing target while maintaining altitude 수평 접근
+	DescendAboveTarget, // Stay over landing target while descending  타겟 위에서 하강
+	FinalApproach, // Final landing approach, even without landing target 마지막 접근
+	Search, // Search for landing target  탐색
+	Fallback, // Fallback landing method 일반 착륙 모드로 동작
+	Done // Done landing  착륙 완료
 };
 
 enum class PrecLandMode {
-	Opportunistic = 1, // only do precision landing if landing target visible at the beginning
-	Required = 2 // try to find landing target if not visible at the beginning
+	Opportunistic = 1, // only do precision landing if landing target visible at the beginning 처음에 타겟이 있는 경우에만 prec landing 동작
+	Required = 2 // try to find landing target if not visible at the beginning  처음에 타겟 못찾아도 탐색 동작 시도
 };
 
 class PrecLand : public MissionBlock, public ModuleParams
@@ -77,6 +77,7 @@ public:
 	PrecLandMode get_mode() { return _mode; };
 
 private:
+	// 각 상태에 따른 control loop 수행
 	// run the control loop for each state
 	void run_state_start();
 	void run_state_horizontal_approach();
@@ -85,6 +86,7 @@ private:
 	void run_state_search();
 	void run_state_fallback();
 
+	// 다른 state로 전환 시도. state 변환이 성공적으로 이뤄지면 true. 
 	// attempt to switch to a different state. Returns true if state change was successful, false otherwise
 	bool switch_to_state_start();
 	bool switch_to_state_horizontal_approach();
@@ -94,6 +96,7 @@ private:
 	bool switch_to_state_fallback();
 	bool switch_to_state_done();
 
+	// 해당 state로 전환이 가능하다면 true 반환.
 	// check if a given state could be changed into. Return true if possible to transition to state, false otherwise
 	bool check_state_conditions(PrecLandState state);
 	void slewrate(float &sp_x, float &sp_y);
@@ -101,18 +104,19 @@ private:
 	landing_target_pose_s _target_pose{}; /**< precision landing target position */
 
 	int _target_pose_sub{-1};
-	bool _target_pose_valid{false}; /**< whether we have received a landing target position message */
-	bool _target_pose_updated{false}; /**< wether the landing target position message is updated */
+	bool _target_pose_valid{false}; /**< whether we have received a landing target position message / 타겟 위치 메시지를 수신 여부 */
+	bool _target_pose_updated{false}; /**< wether the landing target position message is updated / 타겟 위치 메시지 업데이트 여부 */
 
+	// projection을 위한 reference
 	struct map_projection_reference_s _map_ref {}; /**< reference for local/global projections */
 
-	uint64_t _state_start_time{0}; /**< time when we entered current state */
-	uint64_t _last_slewrate_time{0}; /**< time when we last limited setpoint changes */
-	uint64_t _target_acquired_time{0}; /**< time when we first saw the landing target during search */
-	uint64_t _point_reached_time{0}; /**< time when we reached a setpoint */
+	uint64_t _state_start_time{0}; /**< time when we entered current state  /현재 상태로 진입한 시간 */
+	uint64_t _last_slewrate_time{0}; /**< time when we last limited setpoint changes /제한된 sp가 지속된 시간 */
+	uint64_t _target_acquired_time{0}; /**< time when we first saw the landing target during search /탐색시 처음 타겟을 발견한 시간 */
+	uint64_t _point_reached_time{0}; /**< time when we reached a setpoint /sp에 도달했을 때 시간  */
 
-	int _search_cnt{0}; /**< counter of how many times we had to search for the landing target */
-	float _approach_alt{0.0f}; /**< altitude at which to stay during horizontal approach */
+	int _search_cnt{0}; /**< counter of how many times we had to search for the landing target /타겟 탐색 시도 횟수 */
+	float _approach_alt{0.0f}; /**< altitude at which to stay during horizontal approach /수평 접근시 사용하는 고도 */
 
 	matrix::Vector2f _sp_pev;
 	matrix::Vector2f _sp_pev_prev;

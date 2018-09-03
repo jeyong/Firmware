@@ -107,6 +107,7 @@ PrecLand::on_activation()
 void
 PrecLand::on_active()
 {
+	// target pose를 subscribe 하기
 	// get new target measurement
 	orb_check(_target_pose_sub, &_target_pose_updated);
 
@@ -119,7 +120,7 @@ PrecLand::on_active()
 		_target_pose_valid = false;
 	}
 
-	// stop if we are landed
+	// 이미 착륙한 경우 done 상태로 설정. stop if we are landed
 	if (_navigator->get_land_detected()->landed) {
 		switch_to_state_done();
 	}
@@ -163,11 +164,13 @@ PrecLand::on_active()
 void
 PrecLand::run_state_start()
 {
+	// 수평 접근 상태로 전환 가능하면 전환
 	// check if target visible and go to horizontal approach
 	if (switch_to_state_horizontal_approach()) {
 		return;
 	}
 
+	// 처음에 타겟을 못찾으면 일반 착륙모드로 동작
 	if (_mode == PrecLandMode::Opportunistic) {
 		// could not see the target immediately, so just fall back to normal landing
 		if (!switch_to_state_fallback()) {
@@ -179,12 +182,13 @@ PrecLand::run_state_start()
 	float dist = get_distance_to_next_waypoint(pos_sp_triplet->current.lat, pos_sp_triplet->current.lon,
 			_navigator->get_global_position()->lat, _navigator->get_global_position()->lon);
 
+	// 허용 범위내로 들어가면 타겟을 탐색. 
 	// check if we've reached the start point
 	if (dist < _navigator->get_acceptance_radius()) {
 		if (!_point_reached_time) {
 			_point_reached_time = hrt_absolute_time();
 		}
-
+		// 1초 후에 타겟을 탐색하지 못했다면 다시 탐색.
 		// if we don't see the target after 1 second, search for it
 		if (_param_search_timeout.get() > 0) {
 
@@ -209,6 +213,7 @@ PrecLand::run_state_horizontal_approach()
 {
 	position_setpoint_triplet_s *pos_sp_triplet = _navigator->get_position_setpoint_triplet();
 
+	// 수평접근 가능한 상태가 아니라면(타겟을 놓친 경우), 현재 위치에서 타겟을 찾기 위해서 sp를 현재 위치로 설정
 	// check if target visible, if not go to start
 	if (!check_state_conditions(PrecLandState::HorizontalApproach)) {
 		PX4_WARN("Lost landing target while landing (horizontal approach).");
@@ -218,6 +223,7 @@ PrecLand::run_state_horizontal_approach()
 		pos_sp_triplet->current.lon = _navigator->get_global_position()->lon;
 		pos_sp_triplet->current.alt = _navigator->get_global_position()->alt;
 
+		// START 상태로 전환하거나 일반 착륙 모드로 전환
 		if (!switch_to_state_start()) {
 			if (!switch_to_state_fallback()) {
 				PX4_ERR("Can't switch to fallback landing");
@@ -227,6 +233,7 @@ PrecLand::run_state_horizontal_approach()
 		return;
 	}
 
+	// 타겟 위에서 하강 가능한 상태라면, 하강 상태로 전환
 	if (check_state_conditions(PrecLandState::DescendAboveTarget)) {
 		if (!_point_reached_time) {
 			_point_reached_time = hrt_absolute_time();
@@ -241,6 +248,7 @@ PrecLand::run_state_horizontal_approach()
 
 	}
 
+	// 수평이동 상태로 너무 오래 남아 있는 경우, 그냥 일반 착륙 모드로 전환
 	if (hrt_absolute_time() - _state_start_time > STATE_TIMEOUT) {
 		PX4_ERR("Precision landing took too long during horizontal approach phase.");
 
@@ -254,25 +262,29 @@ PrecLand::run_state_horizontal_approach()
 	float x = _target_pose.x_abs;
 	float y = _target_pose.y_abs;
 
+	// x, y로 slew rate를 설정
 	slewrate(x, y);
 
+	// x,y를 이용해서 lat, lon 구하기. sp로 lat, lon을 사용하니까 이 값을 구해야함.
 	// XXX need to transform to GPS coords because mc_pos_control only looks at that
 	double lat, lon;
 	map_projection_reproject(&_map_ref, x, y, &lat, &lon);
 
 	pos_sp_triplet->current.lat = lat;
 	pos_sp_triplet->current.lon = lon;
-	pos_sp_triplet->current.alt = _approach_alt;
+	pos_sp_triplet->current.alt = _approach_alt; // 접근 고도
 	pos_sp_triplet->current.type = position_setpoint_s::SETPOINT_TYPE_POSITION;
 
 	_navigator->set_position_setpoint_triplet_updated();
 }
 
+// 타겟 위에서 하강하는 state
 void
 PrecLand::run_state_descend_above_target()
 {
 	position_setpoint_triplet_s *pos_sp_triplet = _navigator->get_position_setpoint_triplet();
 
+	// 타겟 하강 상태로 전환 가능한지 체크해서 불가능한 경우, 타겟을 현재 위치에서 찾기 위해서 sp를 현재 위치로 설정
 	// check if target visible
 	if (!check_state_conditions(PrecLandState::DescendAboveTarget)) {
 		if (!switch_to_state_final_approach()) {
@@ -283,6 +295,7 @@ PrecLand::run_state_descend_above_target()
 			pos_sp_triplet->current.lon = _navigator->get_global_position()->lon;
 			pos_sp_triplet->current.alt = _navigator->get_global_position()->alt;
 
+			// start 상태로 시도해서 안되면 일반 착륙 모드로 전환
 			if (!switch_to_state_start()) {
 				if (!switch_to_state_fallback()) {
 					PX4_ERR("Can't switch to fallback landing");
@@ -293,6 +306,7 @@ PrecLand::run_state_descend_above_target()
 		return;
 	}
 
+	//x, y로 lat, lon을 구해서 sp의 lat, lon 설정
 	// XXX need to transform to GPS coords because mc_pos_control only looks at that
 	double lat, lon;
 	map_projection_reproject(&_map_ref, _target_pose.x_abs, _target_pose.y_abs, &lat, &lon);
@@ -351,9 +365,11 @@ PrecLand::run_state_fallback()
 	// nothing to do, will land
 }
 
+//start 상태로 변환
 bool
 PrecLand::switch_to_state_start()
 {
+	// Start 상태로 전환 가능한지 체크하고 가능하면 sp의 타입을 SETPOINT_TYPE_POSITION로 설정
 	if (check_state_conditions(PrecLandState::Start)) {
 		position_setpoint_triplet_s *pos_sp_triplet = _navigator->get_position_setpoint_triplet();
 		pos_sp_triplet->current.type = position_setpoint_s::SETPOINT_TYPE_POSITION;
@@ -370,6 +386,7 @@ PrecLand::switch_to_state_start()
 	return false;
 }
 
+// 수평 접근 상태로 전환이 가능한 상태인 경우 현재 고도를 approach_alt로 설정
 bool
 PrecLand::switch_to_state_horizontal_approach()
 {
@@ -386,6 +403,7 @@ PrecLand::switch_to_state_horizontal_approach()
 	return false;
 }
 
+//타겟 위에서 하강아 가능한 상태로 전환이 가능한 상태인 경우 상태를 DescendAboveTarget로 설정
 bool
 PrecLand::switch_to_state_descend_above_target()
 {
@@ -398,6 +416,7 @@ PrecLand::switch_to_state_descend_above_target()
 	return false;
 }
 
+// 최종 접근 상태로 전환이 가능한 경우에 상태를 FinalApproach로 설정
 bool
 PrecLand::switch_to_state_final_approach()
 {
@@ -410,6 +429,7 @@ PrecLand::switch_to_state_final_approach()
 	return false;
 }
 
+// 탐색 상태로 전환하면 탐색이 가능한 고도로 이동. 
 bool
 PrecLand::switch_to_state_search()
 {
@@ -417,7 +437,7 @@ PrecLand::switch_to_state_search()
 	vehicle_local_position_s *vehicle_local_position = _navigator->get_local_position();
 
 	position_setpoint_triplet_s *pos_sp_triplet = _navigator->get_position_setpoint_triplet();
-	pos_sp_triplet->current.alt = vehicle_local_position->ref_alt + _param_search_alt.get();
+	pos_sp_triplet->current.alt = vehicle_local_position->ref_alt + _param_search_alt.get();  // 탐색 고도 설정이 핵심
 	pos_sp_triplet->current.type = position_setpoint_s::SETPOINT_TYPE_POSITION;
 	_navigator->set_position_setpoint_triplet_updated();
 
@@ -428,6 +448,7 @@ PrecLand::switch_to_state_search()
 	return true;
 }
 
+// 일반 착륙 모드로 전환시키기 위해서 sp를 현재 위치로 설정
 bool
 PrecLand::switch_to_state_fallback()
 {
