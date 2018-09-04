@@ -93,6 +93,8 @@ MissionFeasibilityChecker::checkMissionFeasible(const mission_s &mission,
 bool
 MissionFeasibilityChecker::checkRotarywing(const mission_s &mission, float home_alt, bool home_alt_valid)
 {
+	// mission count만큼 dm에서 제대로 가져올 수 있는지 확인
+	// mission 중에 takeoff 명령인 경우에 takeoff 고도가 너무 낮은 경우 확인 (허용 반경보다 1m 이상)
 	for (size_t i = 0; i < mission.count; i++) {
 		struct mission_item_s missionitem = {};
 		const ssize_t len = sizeof(struct mission_item_s);
@@ -112,11 +114,11 @@ MissionFeasibilityChecker::checkRotarywing(const mission_s &mission, float home_
 			float acceptance_radius = _navigator->get_altitude_acceptance_radius();
 
 			// if a specific acceptance radius has been defined, use that one instead
-			if (missionitem.acceptance_radius > NAV_EPSILON_POSITION) {
+			if (missionitem.acceptance_radius > NAV_EPSILON_POSITION) {  // NAV_EPSILON_POSITION 보다 작은 경우는 0으로 간주하는 기준
 				acceptance_radius = missionitem.acceptance_radius;
 			}
 
-			if (takeoff_alt - 1.0f < acceptance_radius) {
+			if (takeoff_alt - 1.0f < acceptance_radius) { // takeoff 고도가 허용 반경보다 1m 이상 차이가 나지 않으면 실패로 간주!
 				mavlink_log_critical(_navigator->get_mavlink_log_pub(), "Mission rejected: Takeoff altitude too low!");
 				return false;
 			}
@@ -139,14 +141,17 @@ MissionFeasibilityChecker::checkFixedwing(const mission_s &mission, float home_a
 	return (resTakeoff && resLanding);
 }
 
+// mission item 각각을 꺼내서 geofence를 벗어나는 경우가 없으면 합격!
 bool
 MissionFeasibilityChecker::checkGeofence(const mission_s &mission, float home_alt, bool home_valid)
 {
+	// home이 필요하다고 설정되어 있는데 home이 유효하지 않은 경우 실패!
 	if (_navigator->get_geofence().isHomeRequired() && !home_valid) {
 		mavlink_log_critical(_navigator->get_mavlink_log_pub(), "Geofence requires valid home position");
 		return false;
 	}
 
+	// 모든 mission item이 geofence 내부에 존재하는지 확인
 	/* Check if all mission items are inside the geofence (if we have a valid geofence) */
 	if (_navigator->get_geofence().valid()) {
 		for (size_t i = 0; i < mission.count; i++) {
@@ -166,6 +171,7 @@ MissionFeasibilityChecker::checkGeofence(const mission_s &mission, float home_al
 			// Geofence function checks against home altitude amsl
 			missionitem.altitude = missionitem.altitude_is_relative ? missionitem.altitude + home_alt : missionitem.altitude;
 
+			// 핵심 동작은 geofence.check()를 이용해서 mission item을 체크하는 방식
 			if (MissionBlock::item_contains_position(missionitem) && !_navigator->get_geofence().check(missionitem)) {
 
 				mavlink_log_critical(_navigator->get_mavlink_log_pub(), "Geofence violation for waypoint %d", i + 1);
@@ -177,6 +183,7 @@ MissionFeasibilityChecker::checkGeofence(const mission_s &mission, float home_al
 	return true;
 }
 
+// mission item의 고도가 home alt보다 큰 경우면 정상. 작은 경우는 문제가 있는 상황! throw_error 인자에 따라서 단순힌 경고 메시지만 날릴지 아니면 실패로 간주할지 결정.
 bool
 MissionFeasibilityChecker::checkHomePositionAltitude(const mission_s &mission, float home_alt, bool home_alt_valid,
 		bool throw_error)
@@ -192,6 +199,7 @@ MissionFeasibilityChecker::checkHomePositionAltitude(const mission_s &mission, f
 			return false;
 		}
 
+		// home alt가 유효하지 않은 경우 상대 고도를 사용하며 warning 상태를 true로 설정. 인자 중에 throw_error가 true로 설정되어 있는 경우 warning 상태가 되면 실패로 간주함.
 		/* reject relative alt without home set */
 		if (missionitem.altitude_is_relative && !home_alt_valid && MissionBlock::item_contains_position(missionitem)) {
 
@@ -207,9 +215,11 @@ MissionFeasibilityChecker::checkHomePositionAltitude(const mission_s &mission, f
 			}
 		}
 
+		// home alt가 유효한 경우(정상 상황), wp 고도를 설정
 		/* calculate the global waypoint altitude */
 		float wp_alt = (missionitem.altitude_is_relative) ? missionitem.altitude + home_alt : missionitem.altitude;
 
+		// home 고도 > wp 고도 인경우 비정상적인 상황으로 
 		if ((home_alt > wp_alt) && MissionBlock::item_contains_position(missionitem)) {
 
 			_navigator->get_mission_result()->warning = true;
@@ -228,6 +238,7 @@ MissionFeasibilityChecker::checkHomePositionAltitude(const mission_s &mission, f
 	return true;
 }
 
+// mission item 중에 지원하지 않는 cmd가 있는지 확인. 조건에 있는 cmd 중에 하나여야 
 bool
 MissionFeasibilityChecker::checkMissionItemValidity(const mission_s &mission)
 {
@@ -281,6 +292,7 @@ MissionFeasibilityChecker::checkMissionItemValidity(const mission_s &mission)
 			return false;
 		}
 
+		// 서보 명령 무시
 		/* Check non navigation item */
 		if (missionitem.nav_cmd == NAV_CMD_DO_SET_SERVO) {
 
@@ -299,6 +311,7 @@ MissionFeasibilityChecker::checkMissionItemValidity(const mission_s &mission)
 			}
 		}
 
+		// 이미 착륙한 상태인데 LAND 명령을 받으면 실패!
 		// check if the mission starts with a land command while the vehicle is landed
 		if ((i == 0) && missionitem.nav_cmd == NAV_CMD_LAND && _navigator->get_land_detected()->landed) {
 
@@ -466,6 +479,7 @@ MissionFeasibilityChecker::checkFixedWingLanding(const mission_s &mission, bool 
 	return true;
 }
 
+// 첫번째 waypoint까지의 거리 검사. (자동 비행을 하자마자 너무 먼 장소로 이동하는 것을 막기 위해서)
 bool
 MissionFeasibilityChecker::checkDistanceToFirstWaypoint(const mission_s &mission, float max_distance)
 {
@@ -485,16 +499,19 @@ MissionFeasibilityChecker::checkDistanceToFirstWaypoint(const mission_s &mission
 			return false;
 		}
 
+		// 위치 정보를 가지고 있지 않으면 다음 mission item을 검사하기 위해서 continue
 		/* check only items with valid lat/lon */
 		if (!MissionBlock::item_contains_position(mission_item)) {
 			continue;
 		}
 
+		// 현재 위치를 기준으로 첫번째 mission item과의 거리 구하기.
 		/* check distance from current position to item */
 		float dist_to_1wp = get_distance_to_next_waypoint(
 					    mission_item.lat, mission_item.lon,
 					    _navigator->get_home_position()->lat, _navigator->get_home_position()->lon);
 
+		// 최대 거리 허용 거리의 2/3 이하면 정상이고 2/3 이상이면 warning 설정
 		if (dist_to_1wp < max_distance) {
 
 			if (dist_to_1wp > ((max_distance * 2) / 3)) {
@@ -507,7 +524,7 @@ MissionFeasibilityChecker::checkDistanceToFirstWaypoint(const mission_s &mission
 
 			return true;
 
-		} else {
+		} else {  // 최대 허용 거리보다 크면 자동 비행 불가
 			/* item is too far from home */
 			mavlink_log_critical(_navigator->get_mavlink_log_pub(),
 					     "First waypoint too far away: %d meters, %d max.",
@@ -518,13 +535,16 @@ MissionFeasibilityChecker::checkDistanceToFirstWaypoint(const mission_s &mission
 		}
 	}
 
+	// waypoint 관련 mission item이 없으므로 멀리 비행하는 일은 없기 때문에 true 반환
 	/* no waypoints found in mission, then we will not fly far away */
 	return true;
 }
 
+// waypoint들 사이의 거리를 검사 
 bool
 MissionFeasibilityChecker::checkDistancesBetweenWaypoints(const mission_s &mission, float max_distance)
 {
+	// 최대 거리가 0이하면 검사 설정이 안된 것이므로 무조건 true 반환
 	if (max_distance <= 0.0f) {
 		/* param not set, check is ok */
 		return true;
@@ -533,6 +553,7 @@ MissionFeasibilityChecker::checkDistancesBetweenWaypoints(const mission_s &missi
 	double last_lat = NAN;
 	double last_lon = NAN;
 
+	// 모든 waypoint에 대해서 이전 mission item의 lat, lon과 현재 mission item의 lat, lon을 비교.
 	/* Go through all waypoints */
 	for (size_t i = 0; i < mission.count; i++) {
 
@@ -557,6 +578,7 @@ MissionFeasibilityChecker::checkDistancesBetweenWaypoints(const mission_s &missi
 					mission_item.lat, mission_item.lon,
 					last_lat, last_lon);
 
+			// 최대 거리 범위 내에서 2/3 이하면 정상이고 2/3 이상이면 warning 설정.
 			if (dist_between_waypoints < max_distance) {
 
 				if (dist_between_waypoints > ((max_distance * 2) / 3)) {
@@ -567,7 +589,7 @@ MissionFeasibilityChecker::checkDistancesBetweenWaypoints(const mission_s &missi
 					_navigator->get_mission_result()->warning = true;
 				}
 
-			} else {
+			} else {  // 간격이 최대 허용 거리를 넘어서는 경우 실패
 				/* item is too far from home */
 				mavlink_log_critical(_navigator->get_mavlink_log_pub(),
 						     "Distance between waypoints too far: %d meters, %d max.",
@@ -582,6 +604,7 @@ MissionFeasibilityChecker::checkDistancesBetweenWaypoints(const mission_s &missi
 		last_lon = mission_item.lon;
 	}
 
+	// 여기까지 오는 경우는 최대 거리를 넘어서는 경우가 없었으므로 true
 	/* We ran through all waypoints and have not found any distances between waypoints that are too far. */
 	return true;
 }

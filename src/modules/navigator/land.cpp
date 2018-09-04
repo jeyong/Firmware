@@ -46,6 +46,8 @@ Land::Land(Navigator *navigator) :
 {
 }
 
+// 착륙을 위한 mission item을 만들고 이를 이용해서 sp 설정
+// 현재 위치에서 착륙하므로 현재 pos를 기준으로 set_land_item()을 이용해서 mission item을 설정하고 mission_item_to_position_setpoint()으로 sp 설정.
 void
 Land::on_activation()
 {
@@ -70,6 +72,7 @@ Land::on_activation()
 void
 Land::on_active()
 {
+	// VTOL 무시
 	/* for VTOL update landing location during back transition */
 	if (_navigator->get_vstatus()->is_vtol &&
 	    _navigator->get_vstatus()->in_transition_mode) {
@@ -80,10 +83,11 @@ Land::on_active()
 	}
 
 
+	// 착륙하면 idle 상태로 설정
 	if (is_mission_item_reached() && !_navigator->get_mission_result()->finished) {
-		_navigator->get_mission_result()->finished = true;
+		_navigator->get_mission_result()->finished = true;  // 종료로 설정
 		_navigator->set_mission_result_updated();
-		set_idle_item(&_mission_item);
+		set_idle_item(&_mission_item);  //idle 설정
 
 		struct position_setpoint_triplet_s *pos_sp_triplet = _navigator->get_position_setpoint_triplet();
 		mission_item_to_position_setpoint(_mission_item, &pos_sp_triplet->current);
