@@ -65,7 +65,7 @@ bool
 MissionBlock::is_mission_item_reached()
 {
 	/* handle non-navigation or indefinite waypoints */
-
+	// NAV_CMD_DO_Xxxx(mission cmd)의 경우 명령이 전달되었다는 것으로 true으로 반환
 	switch (_mission_item.nav_cmd) {
 	case NAV_CMD_DO_SET_SERVO:
 		return true;
@@ -124,6 +124,7 @@ MissionBlock::is_mission_item_reached()
 
 	hrt_abstime now = hrt_absolute_time();
 
+	// 미착륙 & waypoint 위치 미도착인 경우
 	if (!_navigator->get_land_detected()->landed && !_waypoint_position_reached) {
 
 		float dist = -1.0f;
@@ -140,6 +141,7 @@ MissionBlock::is_mission_item_reached()
 				_navigator->get_global_position()->alt,
 				&dist_xy, &dist_z);
 
+		// fw 무시
 		/* FW special case for NAV_CMD_WAYPOINT to achieve altitude via loiter */
 		if (!_navigator->get_vstatus()->is_rotary_wing &&
 		    (_mission_item.nav_cmd == NAV_CMD_WAYPOINT)) {
@@ -174,6 +176,7 @@ MissionBlock::is_mission_item_reached()
 			}
 		}
 
+		// takeoff 명령인 경우 고도만 허용 범위 안에 들어왔는지 체크한다.
 		if ((_mission_item.nav_cmd == NAV_CMD_TAKEOFF || _mission_item.nav_cmd == NAV_CMD_VTOL_TAKEOFF)
 		    && _navigator->get_vstatus()->is_rotary_wing) {
 
@@ -198,14 +201,14 @@ MissionBlock::is_mission_item_reached()
 				_waypoint_position_reached = true;
 			}
 
-		} else if (_mission_item.nav_cmd == NAV_CMD_TAKEOFF) {
+		} else if (_mission_item.nav_cmd == NAV_CMD_TAKEOFF) { //vtol인 경우 무시
 			/* for takeoff mission items use the parameter for the takeoff acceptance radius */
 			if (dist >= 0.0f && dist <= _navigator->get_acceptance_radius()
 			    && dist_z <= _navigator->get_altitude_acceptance_radius()) {
 				_waypoint_position_reached = true;
 			}
 
-		} else if (!_navigator->get_vstatus()->is_rotary_wing &&
+		} else if (!_navigator->get_vstatus()->is_rotary_wing &&  //mc가 아닌 경우이므로 무시
 			   (_mission_item.nav_cmd == NAV_CMD_LOITER_UNLIMITED ||
 			    _mission_item.nav_cmd == NAV_CMD_LOITER_TIME_LIMIT)) {
 			/* Loiter mission item on a non rotary wing: the aircraft is going to circle the
@@ -223,19 +226,21 @@ MissionBlock::is_mission_item_reached()
 				_time_first_inside_orbit = 0;
 			}
 
-		} else if (!_navigator->get_vstatus()->is_rotary_wing &&
+		} else if (!_navigator->get_vstatus()->is_rotary_wing &&  //mc의 loiter하는 경우 
 			   (_mission_item.nav_cmd == NAV_CMD_LOITER_TO_ALT)) {
 
-
+			// NAV_CMD_LOITER_TO_ALT는 mission . 
 			// NAV_CMD_LOITER_TO_ALT only uses mission item altitude once it's in the loiter
 			//  first check if the altitude setpoint is the mission setpoint
 			struct position_setpoint_s *curr_sp = &_navigator->get_position_setpoint_triplet()->current;
 
+			// 현재 고도와 loiter 타겟 고도차이가 허용 범위 밖인 경우 
 			if (fabsf(curr_sp->alt - altitude_amsl) >= FLT_EPSILON) {
 				// check if the initial loiter has been accepted
 				dist_xy = -1.0f;
 				dist_z = -1.0f;
 
+				// 타겟 위치와 현재 위치의 거리를 구하고 이 거리가 허용 범위면 고도만 설정한다.
 				dist = get_distance_to_point_global_wgs84(_mission_item.lat, _mission_item.lon, curr_sp->alt,
 						_navigator->get_global_position()->lat,
 						_navigator->get_global_position()->lon,
@@ -250,7 +255,7 @@ MissionBlock::is_mission_item_reached()
 					_navigator->set_position_setpoint_triplet_updated();
 				}
 
-			} else {
+			} else { // 현재 위치와 고도가 허용 범위 안에 있는 경우, 최종적으로 yaw 설정해 줘야하는 경우라면(force_heading) yaw를 설정
 				if (dist >= 0.0f && dist <= _navigator->get_acceptance_radius(fabsf(_mission_item.loiter_radius) * 1.2f)
 				    && dist_z <= _navigator->get_altitude_acceptance_radius()) {
 
@@ -279,7 +284,7 @@ MissionBlock::is_mission_item_reached()
 			_waypoint_yaw_reached = true;
 			_time_wp_reached = now;
 
-		} else {
+		} else { // 이외 mission cmd인 경우
 			/* for normal mission items used their acceptance radius */
 			float mission_acceptance_radius = _navigator->get_acceptance_radius(_mission_item.acceptance_radius);
 
@@ -316,8 +321,8 @@ MissionBlock::is_mission_item_reached()
 		}
 	}
 
+	// wp 도착 & yaw는 아직 미도착
 	/* Check if the waypoint and the requested yaw setpoint. */
-
 	if (_waypoint_position_reached && !_waypoint_yaw_reached) {
 
 		if ((_navigator->get_vstatus()->is_rotary_wing
@@ -351,6 +356,8 @@ MissionBlock::is_mission_item_reached()
 		}
 	}
 
+	// wp 도착 & yaw 도착
+	// loiter 상태로 얼마나 있었는지 보기 위해서 시간 카운트 시작
 	/* Once the waypoint and yaw setpoint have been reached we can start the loiter time countdown */
 	if (_waypoint_position_reached && _waypoint_yaw_reached) {
 
@@ -394,6 +401,7 @@ MissionBlock::is_mission_item_reached()
 		}
 	}
 
+	// true 조건에 못들어간 경우 wp 및 yaw 모두 false인 상태.
 	// all acceptance criteria must be met in the same iteration
 	_waypoint_position_reached = false;
 	_waypoint_yaw_reached = false;
@@ -412,15 +420,18 @@ MissionBlock::reset_mission_item_reached()
 void
 MissionBlock::issue_command(const mission_item_s &item)
 {
+	// item에 위치 정보가 있는 경우 comm가 아니므로 그냥 return
 	if (item_contains_position(item)) {
 		return;
 	}
 
+	// LAND_START는 land 상태로 들어갔다는 maker로 사용하므로 return
 	// NAV_CMD_DO_LAND_START is only a marker
 	if (item.nav_cmd == NAV_CMD_DO_LAND_START) {
 		return;
 	}
 
+	// fw이나 카메라 처리 이므로 무시
 	if (item.nav_cmd == NAV_CMD_DO_SET_SERVO) {
 		PX4_INFO("DO_SET_SERVO command");
 
@@ -440,6 +451,7 @@ MissionBlock::issue_command(const mission_item_s &item)
 		}
 
 	} else {
+		// mission item 중에 comm으로 사용가능한 경우 vehicle cmd로 변환하여 publish. 
 		_action_start = hrt_absolute_time();
 
 		// mission_item -> vehicle_command
@@ -466,9 +478,11 @@ MissionBlock::issue_command(const mission_item_s &item)
 	}
 }
 
+//mission item의 time_inside 값을 가져옴
 float
 MissionBlock::get_time_inside(const struct mission_item_s &item)
 {
+	// takeoff시에는 명령에 도달하는 시간 count하지 않으므로
 	if (item.nav_cmd != NAV_CMD_TAKEOFF) {
 		return item.time_inside;
 	}
@@ -476,6 +490,7 @@ MissionBlock::get_time_inside(const struct mission_item_s &item)
 	return 0.0f;
 }
 
+// 아래와 같은 명령에만 position 정보가 들어가 있음
 bool
 MissionBlock::item_contains_position(const mission_item_s &item)
 {
@@ -490,9 +505,11 @@ MissionBlock::item_contains_position(const mission_item_s &item)
 	       item.nav_cmd == NAV_CMD_DO_FOLLOW_REPOSITION;
 }
 
+//mission item으로 sp의 값을 설정. sp 값을 채우는 것이 목적!
 bool
 MissionBlock::mission_item_to_position_setpoint(const mission_item_s &item, position_setpoint_s *sp)
 {
+	// pos 정보를 없는 item인 경우 중단
 	/* don't change the setpoint for non-position items */
 	if (!item_contains_position(item)) {
 		return false;
@@ -500,7 +517,7 @@ MissionBlock::mission_item_to_position_setpoint(const mission_item_s &item, posi
 
 	sp->lat = item.lat;
 	sp->lon = item.lon;
-	sp->alt = item.altitude_is_relative ? item.altitude + _navigator->get_home_position()->alt : item.altitude;
+	sp->alt = item.altitude_is_relative ? item.altitude + _navigator->get_home_position()->alt : item.altitude; //상대 고도는 home고도 기준으로 얼마나 높이 있는지를 뜻함
 	sp->yaw = item.yaw;
 	sp->yaw_valid = PX4_ISFINITE(item.yaw);
 	sp->loiter_radius = (fabsf(item.loiter_radius) > NAV_EPSILON_POSITION) ? fabsf(item.loiter_radius) :
@@ -517,7 +534,7 @@ MissionBlock::mission_item_to_position_setpoint(const mission_item_s &item, posi
 		break;
 
 	case NAV_CMD_TAKEOFF:
-
+		// takeoff의 경우 이미 armed 상태면 위치의 이동이므로 positon 타입이 되고 armed가 안된 경우에는 takeoff 타입이 됨.
 		// if already flying (armed and !landed) treat TAKEOFF like regular POSITION
 		if ((_navigator->get_vstatus()->arming_state == vehicle_status_s::ARMING_STATE_ARMED)
 		    && !_navigator->get_land_detected()->landed) {
@@ -543,7 +560,7 @@ MissionBlock::mission_item_to_position_setpoint(const mission_item_s &item, posi
 		break;
 
 	case NAV_CMD_LOITER_TO_ALT:
-
+		// 처음에는 현재 고도를 사용. 나중에 loiter 위치로 들어가게 되면 mission의 고도로 전환
 		// initially use current altitude, and switch to mission item altitude once in loiter position
 		if (_navigator->get_loiter_min_alt() > 0.0f) { // ignore _param_loiter_min_alt if smaller then 0 (-1)
 			sp->alt = math::max(_navigator->get_global_position()->alt,
@@ -553,7 +570,7 @@ MissionBlock::mission_item_to_position_setpoint(const mission_item_s &item, posi
 			sp->alt = _navigator->get_global_position()->alt;
 		}
 
-	// fall through
+	// fall through //여기서 처럼 loiter모드에서는 mission item의 고도를 사용.
 	case NAV_CMD_LOITER_TIME_LIMIT:
 	case NAV_CMD_LOITER_UNLIMITED:
 		sp->type = position_setpoint_s::SETPOINT_TYPE_LOITER;
@@ -569,25 +586,28 @@ MissionBlock::mission_item_to_position_setpoint(const mission_item_s &item, posi
 	return sp->valid;
 }
 
+// loiter에 필요한 mission item 설정. 인자로 최소 마진 값을 넘겨줌
 void
 MissionBlock::set_loiter_item(struct mission_item_s *item, float min_clearance)
 {
 	if (_navigator->get_land_detected()->landed) {
+		// 이미 착륙한 상태면 idle로 변환
 		/* landed, don't takeoff, but switch to IDLE mode */
 		item->nav_cmd = NAV_CMD_IDLE;
 
-	} else {
+	} else { // 
 		item->nav_cmd = NAV_CMD_LOITER_UNLIMITED;
 
 		struct position_setpoint_triplet_s *pos_sp_triplet = _navigator->get_position_setpoint_triplet();
 
+		// 현재 위치에서 loiter가 가능하고 현재 pos가 유효한 경우 현재 pos 위치를 mission item에 넣어줌
 		if (_navigator->get_can_loiter_at_sp() && pos_sp_triplet->current.valid) {
 			/* use current position setpoint */
 			item->lat = pos_sp_triplet->current.lat;
 			item->lon = pos_sp_triplet->current.lon;
 			item->altitude = pos_sp_triplet->current.alt;
 
-		} else {
+		} else { // pos가 유효하지 않은 경우 gpos를 사용해서 lat, lon, 고도를 설정. gpos의 고도와 home고도 + 마진 중에 큰 값을 선택하도록.
 			/* use current position and use return altitude as clearance */
 			item->lat = _navigator->get_global_position()->lat;
 			item->lon = _navigator->get_global_position()->lon;
@@ -608,6 +628,7 @@ MissionBlock::set_loiter_item(struct mission_item_s *item, float min_clearance)
 	}
 }
 
+//takeoff에 필요한 mission item을 생성
 void
 MissionBlock::set_takeoff_item(struct mission_item_s *item, float abs_altitude, float min_pitch)
 {
@@ -627,9 +648,11 @@ MissionBlock::set_takeoff_item(struct mission_item_s *item, float abs_altitude, 
 	item->origin = ORIGIN_ONBOARD;
 }
 
+//land에 필요한 mission item을 생성. 현재 위치에 착륙할 것인지 home 위치에 착륙할 것인지 결정하는 인자에 따라 lat, lon, yaw 설정 
 void
 MissionBlock::set_land_item(struct mission_item_s *item, bool at_current_location)
 {
+	// VTOL인 경우 무시 
 	/* VTOL transition to RW before landing */
 	if (_navigator->force_vtol()) {
 
@@ -664,10 +687,11 @@ MissionBlock::set_land_item(struct mission_item_s *item, bool at_current_locatio
 	item->origin = ORIGIN_ONBOARD;
 }
 
+// idle 상태에 필요한 mission item 생성. cmd 타입을 NAV_CMD_IDLE로 설정.
 void
 MissionBlock::set_idle_item(struct mission_item_s *item)
 {
-	item->nav_cmd = NAV_CMD_IDLE;
+	item->nav_cmd = NAV_CMD_IDLE; // 이것이 핵심
 	item->lat = _navigator->get_home_position()->lat;
 	item->lon = _navigator->get_home_position()->lon;
 	item->altitude_is_relative = false;
@@ -680,6 +704,7 @@ MissionBlock::set_idle_item(struct mission_item_s *item)
 	item->origin = ORIGIN_ONBOARD;
 }
 
+//vtol 무시
 void
 MissionBlock::set_vtol_transition_item(struct mission_item_s *item, const uint8_t new_mode)
 {
@@ -689,6 +714,10 @@ MissionBlock::set_vtol_transition_item(struct mission_item_s *item, const uint8_
 	item->autocontinue = true;
 }
 
+// mission 실행되기 전에 각 값이 허용하는 범위를 벗어나는 경우 허용 범위로 값을 조정해 주는 역할
+// mission 실행 직전에 호출되는 방식.
+// 현재는 고도에 대한 제약만 포함되어 있고 추가로 허용범위 체크가 필요한 경우 여기에다가 추가해 주면 됨.
+// 현재는 mission item의 고도 설정에 관한 부분만 구현되어 있음 (고도에 대한 체크 및 설정) 
 void
 MissionBlock::mission_apply_limitation(mission_item_s &item)
 {
@@ -699,7 +728,7 @@ MissionBlock::mission_apply_limitation(mission_item_s &item)
 	/* do nothing if altitude max is negative */
 	if (_navigator->get_land_detected()->alt_max > 0.0f) {
 
-		/* absolute altitude */
+		/* absolute altitude */ // 절대 고도
 		float altitude_abs = item.altitude_is_relative
 				     ? item.altitude + _navigator->get_home_position()->alt
 				     : item.altitude;
@@ -718,6 +747,7 @@ MissionBlock::mission_apply_limitation(mission_item_s &item)
 	 */
 }
 
+// mission 에 고도 계산해서 넣기
 float
 MissionBlock::get_absolute_altitude_for_item(struct mission_item_s &mission_item) const
 {

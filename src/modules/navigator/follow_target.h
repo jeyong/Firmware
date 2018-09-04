@@ -131,16 +131,17 @@ private:
 
 	matrix::Dcmf _rot_matrix;
 
-	void track_target_position();
-	void track_target_velocity();
-	bool target_velocity_valid();
-	bool target_position_valid();
-	void reset_target_validity();
-	void update_position_sp(bool velocity_valid, bool position_valid, float yaw_rate);
-	void update_target_motion();
-	void update_target_velocity();
+	void track_target_position(); //타겟 위치를 추적
+	void track_target_velocity(); //타겟 속도 추적
+	bool target_velocity_valid(); // 타겟 속도 유효 여부
+	bool target_position_valid(); // 타겟 위치 유효 여부
+	void reset_target_validity(); // 유효 체크하는 flag 변수들 리셋
+	void update_position_sp(bool velocity_valid, bool position_valid, float yaw_rate); // sp 업데이트
+	void update_target_motion(); // 타겟 motion 업데이트
+	void update_target_velocity(); // 타겟 속도 업데이트
 
 	/**
+	 * follow target에 필요한 mission item 생성
 	 * Set follow_target item
 	 */
 	void set_follow_target_item(struct mission_item_s *item, float min_clearance, follow_target_s &target, float yaw);

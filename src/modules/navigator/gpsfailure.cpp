@@ -59,7 +59,8 @@ GpsFailure::GpsFailure(Navigator *navigator) :
 
 void
 GpsFailure::on_inactive()
-{
+{	
+	// gpsf 상태를 None으로 설정
 	/* reset GPSF state only if setpoint moved */
 	if (!_navigator->get_can_loiter_at_sp()) {
 		_gpsf_state = GPSF_STATE_NONE;
@@ -79,7 +80,10 @@ void
 GpsFailure::on_active()
 {
 	switch (_gpsf_state) {
-	case GPSF_STATE_LOITER: {
+	case GPSF_STATE_LOITER: { // loiter 상태인 경우 attitude sp를 이용한다.
+			// GPS가 없으면 position controller를 사용할 수 없음!!
+			// attitude sp를 publish 함!!
+			// 이런 경우에 사용하라고 지정한 param 값에 따라 roll, pitch, thrust 및 quaternion 값을 계산하여 publish
 			/* Position controller does not run in this mode:
 			 * navigator has to publish an attitude setpoint */
 			vehicle_attitude_setpoint_s att_sp = {};
@@ -101,6 +105,7 @@ GpsFailure::on_active()
 				_att_sp_pub = orb_advertise(ORB_ID(vehicle_attitude_setpoint), &att_sp);
 			}
 
+			// loiter 상태로 지정한 시간까지 기다렸지만 복구가 되지 않은 경우 다음 상태(termination)로 이동
 			/* Measure time */
 			if ((_param_loitertime.get() > FLT_EPSILON) &&
 			    (hrt_elapsed_time(&_timestamp_activation) > _param_loitertime.get() * 1e6f)) {
@@ -122,11 +127,13 @@ GpsFailure::on_active()
 	}
 }
 
+// gpsf 상태에서는 mission item을 설정하지 않고 pos의 prev, cur, next를 모두 false로 설정.
 void
 GpsFailure::set_gpsf_item()
 {
 	struct position_setpoint_triplet_s *pos_sp_triplet = _navigator->get_position_setpoint_triplet();
 
+	// pos 값을 모두 invalid로 하면 pos 제어기가 동작하지 않음. 
 	/* Set pos sp triplet to invalid to stop pos controller */
 	pos_sp_triplet->previous.valid = false;
 	pos_sp_triplet->current.valid = false;
@@ -148,6 +155,7 @@ GpsFailure::set_gpsf_item()
 	_navigator->set_position_setpoint_triplet_updated();
 }
 
+// 다음 gpsf 상태로 전환
 void
 GpsFailure::advance_gpsf()
 {

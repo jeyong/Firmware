@@ -87,6 +87,7 @@ DataLinkLoss::on_active()
 	}
 }
 
+//현재 state를 기준으로 적합한 mission item을 생성. 
 void
 DataLinkLoss::set_dll_item()
 {
@@ -96,8 +97,8 @@ DataLinkLoss::set_dll_item()
 	_navigator->set_can_loiter_at_sp(false);
 
 	switch (_dll_state) {
-	case DLL_STATE_FLYTOCOMMSHOLDWP: {
-			_mission_item.lat = (double)(_param_commsholdlat.get()) * 1.0e-7;
+	case DLL_STATE_FLYTOCOMMSHOLDWP: { //hold waypoint로 이동. 해당 lat, lon, 고도를 설정.
+			_mission_item.lat = (double)(_param_commsholdlat.get()) * 1.0e-7; 
 			_mission_item.lon = (double)(_param_commsholdlon.get()) * 1.0e-7;
 			_mission_item.altitude_is_relative = false;
 			_mission_item.altitude = _param_commsholdalt.get();
@@ -113,7 +114,7 @@ DataLinkLoss::set_dll_item()
 			break;
 		}
 
-	case DLL_STATE_FLYTOAIRFIELDHOMEWP: {
+	case DLL_STATE_FLYTOAIRFIELDHOMEWP: { //airfield home으로 이동. 해당 lat, lon, 고도를 서렂ㅇ
 			_mission_item.lat = (double)(_param_airfieldhomelat.get()) * 1.0e-7;
 			_mission_item.lon = (double)(_param_airfieldhomelon.get()) * 1.0e-7;
 			_mission_item.altitude_is_relative = false;
@@ -130,9 +131,9 @@ DataLinkLoss::set_dll_item()
 			break;
 		}
 
-	case DLL_STATE_TERMINATE: {
+	case DLL_STATE_TERMINATE: { //비행 종료
 			/* Request flight termination from the commander */
-			_navigator->get_mission_result()->flight_termination = true;
+			_navigator->get_mission_result()->flight_termination = true; //종료 flag 설정
 			_navigator->set_mission_result_updated();
 			reset_mission_item_reached();
 			warnx("not switched to manual: request flight termination");
@@ -155,12 +156,14 @@ DataLinkLoss::set_dll_item()
 	_navigator->set_position_setpoint_triplet_updated();
 }
 
+//이 method가 호출되기 전에 현재 state가 완료되었다는 것을 전제로 하므로 반드시 다음 state로 전환되게 되어 있음.
+//현재 state기반으로 특정 조건이 만족되면 다음 state로 전환
 void
 DataLinkLoss::advance_dll()
 {
 	switch (_dll_state) {
 	case DLL_STATE_NONE:
-
+		// data link loss 카운터 값이 임계값을 넘은 경우 home으로 이동하도록
 		/* Check the number of data link losses. If above home fly home directly */
 		/* if number of data link losses limit is not reached fly to comms hold wp */
 		if (_navigator->get_vstatus()->data_link_lost_counter > _param_numberdatalinklosses.get()) {
@@ -173,12 +176,14 @@ DataLinkLoss::advance_dll()
 			_dll_state = DLL_STATE_FLYTOAIRFIELDHOMEWP;
 
 		} else {
+			// comms hold 위치로 설정되어 있으면 comms hold wp로 이동하는 상태로 설정
 			if (!_param_skipcommshold.get()) {
 				warnx("fly to comms hold, datalink loss counter: %d", _navigator->get_vstatus()->data_link_lost_counter);
 				mavlink_log_critical(_navigator->get_mavlink_log_pub(), "fly to comms hold");
 				_dll_state = DLL_STATE_FLYTOCOMMSHOLDWP;
 
 			} else {
+				// 파라미터 comms hold 위치로 설정되어 있지 않는 경우 home으로 이동하는 상태로 설정
 				/* comms hold wp not active, fly to airfield home directly */
 				warnx("Skipping comms hold wp. Flying directly to airfield home");
 				mavlink_log_critical(_navigator->get_mavlink_log_pub(), "fly to airfield home, comms hold skipped");
@@ -188,7 +193,7 @@ DataLinkLoss::advance_dll()
 
 		break;
 
-	case DLL_STATE_FLYTOCOMMSHOLDWP:
+	case DLL_STATE_FLYTOCOMMSHOLDWP:  // home으로 
 		warnx("fly to airfield home");
 		mavlink_log_critical(_navigator->get_mavlink_log_pub(), "fly to airfield home");
 		_dll_state = DLL_STATE_FLYTOAIRFIELDHOMEWP;
