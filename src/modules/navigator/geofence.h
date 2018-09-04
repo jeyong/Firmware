@@ -77,12 +77,14 @@ public:
 	};
 
 	/**
+	 * dm에서 geofence 정보를 읽어서 다각형 혹은 원형의 fence 를 구성
 	 * update the geofence from dataman.
 	 * It's generally not necessary to call this as it will automatically update when the data is changed.
 	 */
 	void updateFence();
 
 	/**
+	 * geofence 위반 여부를 검사
 	 * Return whether the system obeys the geofence.
 	 *
 	 * @return true: system is obeying fence, false: system is violating fence
@@ -91,6 +93,7 @@ public:
 		   const vehicle_gps_position_s &gps_position, const home_position_s home_pos, bool home_position_set);
 
 	/**
+	 * mission item이 geofence를 위반하지 않는지 검사
 	 * Return whether a mission item obeys the geofence.
 	 *
 	 * @return true: system is obeying fence, false: system is violating fence
@@ -172,11 +175,13 @@ private:
 	uint16_t _update_counter{0}; ///< dataman update counter: if it does not match, we polygon data was updated
 
 	/**
+	 * updateFence()의 실제 구현부분
 	 * implementation of updateFence(), but without locking
 	 */
 	void _updateFence();
 
 	/**
+	 * lat, lon, 고도를 인자로 넘기면 Geofence 위반 여부를 검사
 	 * Check if a point passes the Geofence test.
 	 * This takes all polygons and minimum & maximum altitude into account
 	 *
@@ -189,6 +194,7 @@ private:
 	bool checkPolygons(double lat, double lon, float altitude);
 
 	/**
+	 * (lat, lon, 고도), gpos, (gpos, baro 고도) 이렇게 3가지 방식으로 검사하는 method 제공
 	 * Check if a point passes the Geofence test.
 	 * In addition to checkPolygons(), this takes all additional parameters into account.
 	 *
@@ -200,12 +206,14 @@ private:
 	bool checkAll(const vehicle_global_position_s &global_position, float baro_altitude_amsl);
 
 	/**
+	 * 인자로 전달한 lat, lon, altitude 위치가 polygon 내부인지 여부를 검사
 	 * Check if a single point is within a polygon
 	 * @return true if within polygon
 	 */
 	bool insidePolygon(const PolygonInfo &polygon, double lat, double lon, float altitude);
 
 	/**
+	 * 인자로 전달한 lat, lon, altitude 위치가 원 내부인지 여부를 검사
 	 * Check if a single point is within a circle
 	 * @param polygon must be a circle!
 	 * @return true if within polygon the circle
