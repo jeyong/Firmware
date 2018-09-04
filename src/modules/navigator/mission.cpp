@@ -155,6 +155,7 @@ void
 Mission::on_activation()
 {
 	if (_mission_waypoints_changed) {
+		//현재 위치와 가장 가까운 곳의 mission index 찾는 것은 normal 미션이 아님
 		// do not set the closest mission item in the normal mission mode
 		if (_mission_execution_mode != mission_result_s::MISSION_EXECUTION_MODE_NORMAL) {
 			_current_offboard_mission_index = index_closest_mission_item();
@@ -166,6 +167,7 @@ Mission::on_activation()
 	// we already reset the mission items
 	_execution_mode_changed = false;
 
+	//dm에서 mission을 가져와서 mission item을 설정
 	set_mission_items();
 
 	// unpause triggering if it was paused
@@ -184,6 +186,7 @@ Mission::on_active()
 
 	/* check if anything has changed */
 	bool offboard_updated = false;
+	//offboard mission 변경 체크
 	orb_check(_navigator->get_offboard_mission_sub(), &offboard_updated);
 
 	if (offboard_updated) {
@@ -215,6 +218,7 @@ Mission::on_active()
 		set_mission_items();
 	}
 
+	// 현재 mission이 완료되었는지 체크
 	/* lets check if we reached the current mission item */
 	if (_mission_type != MISSION_TYPE_NONE && is_mission_item_reached()) {
 		/* If we just completed a takeoff which was inserted before the right waypoint,
@@ -224,16 +228,18 @@ Mission::on_active()
 		}
 
 		if (_mission_item.autocontinue) {
+			//autocontinue가 설정되어 있으면 dm에서 다은 mission 꺼내와서 mission item 설정
 			/* switch to next waypoint if 'autocontinue' flag set */
 			advance_mission();
 			set_mission_items();
 		}
 
 	} else if (_mission_type != MISSION_TYPE_NONE && _param_altmode.get() == MISSION_ALTMODE_FOH) {
-
+		//foh의 경우 linear하게 고도 상승을 위해 alt sp값을 설정
 		altitude_sp_foh_update();
 
 	} else {
+		//waypoint 위치에 도착하면 loiter할 수 있도록 설정.
 		/* if waypoint position reached allow loiter on the setpoint */
 		if (_waypoint_position_reached && _mission_item.nav_cmd != NAV_CMD_IDLE) {
 			_navigator->set_can_loiter_at_sp(true);
@@ -244,7 +250,7 @@ Mission::on_active()
 	if (_mission_type != MISSION_TYPE_NONE) {
 		cruising_speed_sp_update();
 	}
-
+	// ROI가 설정된 경우, heading의 sp를 변경
 	/* see if we need to update the current yaw heading */
 	if (_navigator->get_vroi().mode == vehicle_roi_s::ROI_LOCATION
 	    || (_param_yawmode.get() != MISSION_YAWMODE_NONE
@@ -255,13 +261,14 @@ Mission::on_active()
 		heading_sp_update();
 	}
 
+	// LAND 명령으로 동작 중에 landing 취소 상태가 되면 landing 취소 동작
 	/* check if landing needs to be aborted */
 	if ((_mission_item.nav_cmd == NAV_CMD_LAND)
 	    && (_navigator->abort_landing())) {
 
 		do_abort_landing();
 	}
-
+	//precland 동작인 경우 precland->on_active() 동작
 	if (_work_item_type == WORK_ITEM_TYPE_PRECISION_LAND) {
 		// switch out of precision land once landed
 		if (_navigator->get_land_detected()->landed) {
@@ -274,6 +281,7 @@ Mission::on_active()
 	}
 }
 
+//index를 인자로 주면, 해당 index가 유효한 경우 해당 index의 mission으로 mission item을 설정한다. 
 bool
 Mission::set_current_offboard_mission_index(uint16_t index)
 {
@@ -301,12 +309,15 @@ Mission::set_current_offboard_mission_index(uint16_t index)
 	return false;
 }
 
+//현재 mission index를 dm에 있는 mission들 중에서 현재 위치와 가장 가까운 mission의 index로 설정
 void
 Mission::set_closest_item_as_current()
 {
 	_current_offboard_mission_index = index_closest_mission_item();
 }
 
+//실행 모드 MISSION_EXECUTION_MODE_NORMAL, MISSION_EXECUTION_MODE_FAST_FORWARD, MISSION_EXECUTION_MODE_REVERSE를 인자로 지정
+// 핵심은 _current_offboard_mission_index을 1 감소 혹은 증가 시킨다.
 void
 Mission::set_execution_mode(const uint8_t mode)
 {
@@ -314,7 +325,7 @@ Mission::set_execution_mode(const uint8_t mode)
 		_execution_mode_changed = true;
 		_navigator->get_mission_result()->execution_mode = mode;
 
-
+		//reverse로 모드 전환시 _current_offboard_mission_index를 1 감소 시킴
 		switch (_mission_execution_mode) {
 		case mission_result_s::MISSION_EXECUTION_MODE_NORMAL:
 		case mission_result_s::MISSION_EXECUTION_MODE_FAST_FORWARD:
@@ -348,7 +359,7 @@ Mission::set_execution_mode(const uint8_t mode)
 			}
 
 			break;
-
+		//reverse에서 일반 모드로 전환시 _current_offboard_mission_index를 1 증가
 		case mission_result_s::MISSION_EXECUTION_MODE_REVERSE:
 			if ((mode == mission_result_s::MISSION_EXECUTION_MODE_NORMAL) ||
 			    (mode == mission_result_s::MISSION_EXECUTION_MODE_FAST_FORWARD)) {
@@ -371,6 +382,7 @@ Mission::set_execution_mode(const uint8_t mode)
 	}
 }
 
+// dm의 mission 중에 착륙 관련 명령(NAV_CMD_LAND, MAV_CMD_DO_LAND_START)이 있는지 여부를 확인
 bool
 Mission::find_offboard_land_start()
 {
@@ -405,6 +417,7 @@ Mission::find_offboard_land_start()
 	return false;
 }
 
+//mission 중에 착륙관련 명령이 있는 경우 착륙 동작 수행
 bool
 Mission::land_start()
 {
@@ -422,6 +435,7 @@ Mission::land_start()
 	return false;
 }
 
+//현재 비행체가 착륙 중인지 여부 확인 
 bool
 Mission::landing()
 {
@@ -446,11 +460,13 @@ Mission::update_offboard_mission()
 	struct mission_s old_offboard_mission = _offboard_mission;
 
 	if (orb_copy(ORB_ID(mission), _navigator->get_offboard_mission_sub(), &_offboard_mission) == OK) {
+		// current_seq가 유효한 값이면 이 값으로 _current_offboard_mission_index 를 설정
 		/* determine current index */
 		if (_offboard_mission.current_seq >= 0 && _offboard_mission.current_seq < (int)_offboard_mission.count) {
 			_current_offboard_mission_index = _offboard_mission.current_seq;
 
 		} else {
+			// 유효하지 않은 범위인 경우 초기화
 			/* if less items available, reset to first item */
 			if (_current_offboard_mission_index >= (int)_offboard_mission.count) {
 				_current_offboard_mission_index = 0;
@@ -506,7 +522,7 @@ Mission::update_offboard_mission()
 	set_current_offboard_mission_item();
 }
 
-
+//다음 mission으로 이동하기 위해서 _current_offboard_mission_index 증가/감소
 void
 Mission::advance_mission()
 {
@@ -726,6 +742,7 @@ Mission::set_mission_items()
 					_mission_item.yaw = NAN;
 				}
 
+				// 바로 이전에 이륙 명령을 수행한 경우, 실제 waypoint로 이동
 				/* if we just did a normal takeoff navigate to the actual waypoint now */
 				if (_mission_item.nav_cmd == NAV_CMD_TAKEOFF &&
 				    _work_item_type == WORK_ITEM_TYPE_TAKEOFF &&
@@ -740,6 +757,7 @@ Mission::set_mission_items()
 					_mission_item.time_inside = 0.0f;
 				}
 
+				//VTOL 무시 
 				/* if we just did a VTOL takeoff, prepare transition */
 				if (_mission_item.nav_cmd == NAV_CMD_VTOL_TAKEOFF &&
 				    _work_item_type == WORK_ITEM_TYPE_TAKEOFF &&
@@ -759,6 +777,7 @@ Mission::set_mission_items()
 					generate_waypoint_from_heading(&pos_sp_triplet->current, _mission_item.yaw);
 				}
 
+				//VTOL 무시
 				/* takeoff completed and transitioned, move to takeoff wp as fixed wing */
 				if (_mission_item.nav_cmd == NAV_CMD_VTOL_TAKEOFF
 				    && _work_item_type == WORK_ITEM_TYPE_TRANSITON_AFTER_TAKEOFF
@@ -770,6 +789,7 @@ Mission::set_mission_items()
 					_mission_item.time_inside = 0.0f;
 				}
 
+				// fw 무시 
 				/* move to land wp as fixed wing */
 				if (_mission_item.nav_cmd == NAV_CMD_VTOL_LAND
 				    && _work_item_type == WORK_ITEM_TYPE_DEFAULT
@@ -796,6 +816,7 @@ Mission::set_mission_items()
 					_mission_item.vtol_back_transition = true;
 				}
 
+				// VTOL 무시
 				/* transition to MC */
 				if (_mission_item.nav_cmd == NAV_CMD_VTOL_LAND
 				    && _work_item_type == WORK_ITEM_TYPE_MOVE_TO_LAND
@@ -1052,6 +1073,8 @@ Mission::set_mission_items()
 	_navigator->set_position_setpoint_triplet_updated();
 }
 
+//수직 이륙이 필요한지 체크 
+// 실제로는 _need_takeoff에 값 채우기
 bool
 Mission::do_need_vertical_takeoff()
 {
@@ -1060,20 +1083,24 @@ Mission::do_need_vertical_takeoff()
 		float takeoff_alt = calculate_takeoff_altitude(&_mission_item);
 
 		if (_navigator->get_land_detected()->landed) {
+			//착륙된 상태이므로 takeoff 가능
 			/* force takeoff if landed (additional protection) */
 			_need_takeoff = true;
 
 		} else if (_navigator->get_global_position()->alt > takeoff_alt - _navigator->get_altitude_acceptance_radius()) {
+			// 이미 공중에 있는 상태고 takeoff 고도 이상에 위치하고 있으므로 takeoff 필요없음!
 			/* if in-air and already above takeoff height, don't do takeoff */
 			_need_takeoff = false;
 
 		} else if (_navigator->get_global_position()->alt <= takeoff_alt - _navigator->get_altitude_acceptance_radius()
 			   && (_mission_item.nav_cmd == NAV_CMD_TAKEOFF
 			       || _mission_item.nav_cmd == NAV_CMD_VTOL_TAKEOFF)) {
+			// 이미 공중에 있으나 takeoff 고도 이하에 있으므로 takeoff 가능
 			/* if in-air but below takeoff height and we have a takeoff item */
 			_need_takeoff = true;
 		}
 
+		//현재 mission을 봤을 때 이미 이전에 takeoff가 수행되었을 것으로 보이므로 false로 설정
 		/* check if current mission item is one that requires takeoff before */
 		if (_need_takeoff && (
 			    _mission_item.nav_cmd == NAV_CMD_TAKEOFF ||
@@ -1090,6 +1117,7 @@ Mission::do_need_vertical_takeoff()
 	return false;
 }
 
+//착륙지로 이동 가능 여부 확인. 현재 mission의 명령이 LAND이고 착륙 지점 허용 반경을 벗어난 경우에 착륙지로 이동이 필요함. 
 bool
 Mission::do_need_move_to_land()
 {
@@ -1105,6 +1133,7 @@ Mission::do_need_move_to_land()
 	return false;
 }
 
+//VTOL 무시
 bool
 Mission::do_need_move_to_takeoff()
 {
@@ -1119,6 +1148,7 @@ Mission::do_need_move_to_takeoff()
 	return false;
 }
 
+// sp가 유효한 경웨 mission item으로 이 값을 복사.
 void
 Mission::copy_position_if_valid(struct mission_item_s *mission_item, struct position_setpoint_s *setpoint)
 {
@@ -1136,6 +1166,7 @@ Mission::copy_position_if_valid(struct mission_item_s *mission_item, struct posi
 	mission_item->altitude_is_relative = false;
 }
 
+//현재 위치 lat, lon과 다음 mission 위치를 이용해서 heading 방향을 설정.
 void
 Mission::set_align_mission_item(struct mission_item_s *mission_item, struct mission_item_s *mission_item_next)
 {
@@ -1150,6 +1181,7 @@ Mission::set_align_mission_item(struct mission_item_s *mission_item, struct miss
 	mission_item->force_heading = true;
 }
 
+//takeoff 고도 계산
 float
 Mission::calculate_takeoff_altitude(struct mission_item_s *mission_item)
 {
@@ -1157,19 +1189,24 @@ Mission::calculate_takeoff_altitude(struct mission_item_s *mission_item)
 	float takeoff_alt = get_absolute_altitude_for_item(*mission_item);
 
 	/* takeoff to at least MIS_TAKEOFF_ALT above home/ground, even if first waypoint is lower */
+	// 착륙한 상태라면 (mission 고도)와 (현재 고도 + takeoff 최소고도) 중에 큰 값이 이륙 고도
 	if (_navigator->get_land_detected()->landed) {
 		takeoff_alt = fmaxf(takeoff_alt, _navigator->get_global_position()->alt + _navigator->get_takeoff_min_alt());
 
 	} else {
+		// (mission의 고도)과 (home 고도 +  takeoff 최소 고도) 중에 큰 값이 이륙 고도
 		takeoff_alt = fmaxf(takeoff_alt, _navigator->get_home_position()->alt + _navigator->get_takeoff_min_alt());
 	}
 
 	return takeoff_alt;
 }
 
+// takeoff나 land하는 경우에는 heading 업데이트 하지 않음.
+// 비행체가 향하는 방향을 결정하는 동작으로 결국 mission.yaw 값을 설정하는 것이 목적
 void
 Mission::heading_sp_update()
 {
+	//마지막 waypoing가 유효한 상태가 아니였다면 빠져나감
 	/* we don't want to be yawing during takeoff, landing or aligning for a transition */
 	if (_mission_item.nav_cmd == NAV_CMD_TAKEOFF
 	    || _mission_item.nav_cmd == NAV_CMD_VTOL_TAKEOFF
@@ -1183,6 +1220,7 @@ Mission::heading_sp_update()
 
 	struct position_setpoint_triplet_s *pos_sp_triplet = _navigator->get_position_setpoint_triplet();
 
+	//마지막 waypoing가 유효한 상태가 아니였다면 빠져나감
 	/* Don't change setpoint if last and current waypoint are not valid */
 	if (!pos_sp_triplet->current.valid) {
 		return;
@@ -1223,6 +1261,7 @@ Mission::heading_sp_update()
 			//pos_sp_triplet->current.yaw = _mission_item.yaw;
 
 		} else {
+			//비행체 heading의 파라미터 설정에 따라서 타겟이 home이 경우 home의 lat, lon으로 설정
 			/* target location is home */
 			if ((_param_yawmode.get() == MISSION_YAWMODE_FRONT_TO_HOME
 			     || _param_yawmode.get() == MISSION_YAWMODE_BACK_TO_HOME)
@@ -1236,15 +1275,18 @@ Mission::heading_sp_update()
 				point_to_latlon[1] = _navigator->get_home_position()->lon;
 
 			} else {
+				// 타겟이 다음 waypoint인 경우 해당 위치를 lat, lon으로 설정
 				/* target location is next (current) waypoint */
 				point_to_latlon[0] = pos_sp_triplet->current.lat;
 				point_to_latlon[1] = pos_sp_triplet->current.lon;
 			}
 
+			//현재 위치에서 향하는 지점까지의 거리 구하기
 			float d_current = get_distance_to_next_waypoint(
 						  point_from_latlon[0], point_from_latlon[1],
 						  point_to_latlon[0], point_to_latlon[1]);
 
+			// 타겟 지점으로 인정하는 거리보다 멀리 떨어져 있는 경우. yaw를 구한다. 
 			/* stop if positions are close together to prevent excessive yawing */
 			if (d_current > _navigator->get_acceptance_radius()) {
 				float yaw = get_bearing_to_next_waypoint(
@@ -1253,6 +1295,7 @@ Mission::heading_sp_update()
 						    point_to_latlon[0],
 						    point_to_latlon[1]);
 
+				// 비행체의 뒤가 home을 향하는 경우 180도를 더한다. 
 				/* always keep the back of the rotary wing pointing towards home */
 				if (_param_yawmode.get() == MISSION_YAWMODE_BACK_TO_HOME) {
 					_mission_item.yaw = wrap_pi(yaw + M_PI_F);
@@ -1260,6 +1303,7 @@ Mission::heading_sp_update()
 
 				} else if (_param_yawmode.get() == MISSION_YAWMODE_FRONT_TO_WAYPOINT
 					   && _navigator->get_vroi().mode == vehicle_roi_s::ROI_WPNEXT && !_param_mnt_yaw_ctl.get()) {
+					// 비행체 기준  roi가 설정된 경우 roi의 yaw offset만큼 yaw변경
 					/* if yaw control for the mount is disabled and we have a valid ROI that points to the next
 					 * waypoint, we add the gimbal's yaw offset to the vehicle's yaw */
 					yaw += _navigator->get_vroi().yaw_offset;
@@ -1267,6 +1311,7 @@ Mission::heading_sp_update()
 					pos_sp_triplet->current.yaw = _mission_item.yaw;
 
 				} else {
+					//일반적인 경우로 heading이 yaw 방향과 일치하는 경우
 					_mission_item.yaw = yaw;
 					pos_sp_triplet->current.yaw = _mission_item.yaw;
 				}
@@ -1347,6 +1392,7 @@ Mission::altitude_sp_foh_update()
 	_navigator->set_position_setpoint_triplet_updated();
 }
 
+//속도 변경. sp의 curising speed를 변경. 
 void
 Mission::cruising_speed_sp_update()
 {
@@ -1365,6 +1411,8 @@ Mission::cruising_speed_sp_update()
 	_navigator->set_position_setpoint_triplet_updated();
 }
 
+// 착륙 취소.
+// 핵심은 착륙 중에 취소하면 loiter 명령으로 전환된다는 점. 
 void
 Mission::do_abort_landing()
 {
@@ -1548,6 +1596,7 @@ Mission::read_mission_item(int offset, struct mission_item_s *mission_item)
 	return false;
 }
 
+//mission state를 dm의 DM_KEY_MISSION_STATE에 저장. 
 void
 Mission::save_offboard_mission_state()
 {
@@ -1579,6 +1628,7 @@ Mission::save_offboard_mission_state()
 		}
 
 	} else {
+		// 여기 상태로 들어오면 안됨. 만약 이런 경우라면 error 상태를 publish해야함.
 		/* invalid data, this must not happen and indicates error in offboard_mission publisher */
 		mission_state.timestamp = hrt_absolute_time();
 		mission_state.dataman_id = _offboard_mission.dataman_id;
@@ -1601,6 +1651,7 @@ Mission::save_offboard_mission_state()
 	}
 }
 
+//do_jump 명령이 update되었다고 설정. 상태 변경하고 flag로 설정.
 void
 Mission::report_do_jump_mission_changed(int index, int do_jumps_remaining)
 {
@@ -1612,6 +1663,7 @@ Mission::report_do_jump_mission_changed(int index, int do_jumps_remaining)
 	_navigator->set_mission_result_updated();
 }
 
+// 현재 mission을 완료했다고 설정. seq_reached에 현재 index를 대입
 void
 Mission::set_mission_item_reached()
 {
@@ -1621,6 +1673,7 @@ Mission::set_mission_item_reached()
 	reset_mission_item_reached();
 }
 
+// _current_offboard_mission_index를 현재 수행할 mission으로 설정
 void
 Mission::set_current_offboard_mission_item()
 {
@@ -1632,9 +1685,12 @@ Mission::set_current_offboard_mission_item()
 	save_offboard_mission_state();
 }
 
+//mission이 유효한지 검사
+//missionFeasibilityChecker.checkMissionFeasible() 체크가 핵심
 void
 Mission::check_mission_valid(bool force)
 {
+	//home_inited가 안된 경우 동작하는데 force가 true인 경우 home_inited가 된 경우에도 다시 검사하도록 함.
 	if ((!_home_inited && _navigator->home_position_valid()) || force) {
 
 		MissionFeasibilityChecker _missionFeasibilityChecker(_navigator);
@@ -1655,6 +1711,8 @@ Mission::check_mission_valid(bool force)
 	}
 }
 
+// mission 상태를 기록하는 정보를 리셋. 사실 간단히 하는 일은 mission.current_seq = 0 후에 다시 dm에 저장하는 것인데
+// do_jump의 경우 각 mission에 jump count 정보를 저장하고 있어서 이를 reset 해주기 위해서 코드가 길다. 
 void
 Mission::reset_offboard_mission(struct mission_s &mission)
 {
@@ -1665,6 +1723,7 @@ Mission::reset_offboard_mission(struct mission_s &mission)
 			/* set current item to 0 */
 			mission.current_seq = 0;
 
+			//JUMP의 경우 해당 mission에 do_jump_current_count 정보를 가지고 있어서 이 부분까지 초기화 해야한다.
 			/* reset jump counters */
 			if (mission.count > 0) {
 				const dm_item_t dm_current = (dm_item_t)mission.dataman_id;
@@ -1705,6 +1764,7 @@ Mission::reset_offboard_mission(struct mission_s &mission)
 	dm_unlock(DM_KEY_MISSION_STATE);
 }
 
+// mission 수행 중에만 reset이 가능. active 인자는 현재 mission이 실행중인 여부를 나타냄. 
 bool
 Mission::need_to_reset_mission(bool active)
 {
@@ -1721,9 +1781,11 @@ Mission::need_to_reset_mission(bool active)
 	return false;
 }
 
+//yaw값인 heading으로부터 sp 구하기 
 void
 Mission::generate_waypoint_from_heading(struct position_setpoint_s *setpoint, float yaw)
 {
+	//lat, lon, yaw로부터 1000000 m 떨어진 곳을 향해 간다고 가정했을때의 sp의 lat, lon 구하기.
 	waypoint_from_heading_and_distance(
 		_navigator->get_global_position()->lat, _navigator->get_global_position()->lon,
 		yaw, 1000000.0f,
@@ -1732,6 +1794,8 @@ Mission::generate_waypoint_from_heading(struct position_setpoint_s *setpoint, fl
 	setpoint->yaw = yaw;
 }
 
+// mission들 중에서 position 정보를 가지고 있는 것 중에서 현재위치에서 가장 가까이 있는 mission의 index를 반환.
+// 이 위치부터 mission을 시작하도록 하기 위한 목적
 int32_t
 Mission::index_closest_mission_item() const
 {
@@ -1749,7 +1813,7 @@ Mission::index_closest_mission_item() const
 			PX4_ERR("dataman read failure");
 			break;
 		}
-
+		//position 정보가 있는 mission인 경우만 처리
 		if (item_contains_position(missionitem)) {
 			// do not consider land waypoints for a fw
 			if (!((missionitem.nav_cmd == NAV_CMD_LAND) &&
@@ -1770,6 +1834,7 @@ Mission::index_closest_mission_item() const
 		}
 	}
 
+	// reverse 모드인 경우에는 현재 위치기준 home과 위에서 구한 최소거리 mission과의 거리 중에서 가까운 것을 구한다. 
 	// for mission reverse also consider the home position
 	if (_mission_execution_mode == mission_result_s::MISSION_EXECUTION_MODE_REVERSE) {
 		float dist = get_distance_to_point_global_wgs84(
@@ -1790,6 +1855,7 @@ Mission::index_closest_mission_item() const
 	return min_dist_index;
 }
 
+// p1, p2가 동일한 setpoint를 가리키는지 여부 확인
 bool Mission::position_setpoint_equal(const position_setpoint_s *p1, const position_setpoint_s *p2) const
 {
 	return ((p1->valid == p2->valid) &&

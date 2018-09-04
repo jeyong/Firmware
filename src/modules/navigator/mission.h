@@ -102,6 +102,7 @@ public:
 	void set_closest_item_as_current();
 
 	/**
+	 * 새로운 mission mode를 설정하고 모두간 변경에 대한 처리를 담당
 	 * Set a new mission mode and handle the switching between the different modes
 	 *
 	 * For a list of the different modes refer to mission_result.msg
@@ -110,26 +111,31 @@ public:
 private:
 
 	/**
+	 * offboard mission topic을 업데이트
 	 * Update offboard mission topic
 	 */
 	void update_offboard_mission();
 
 	/**
+	 * 다음 item으로 이동 or loiter로 스위치
 	 * Move on to next mission item or switch to loiter
 	 */
 	void advance_mission();
 
 	/**
+	 * 새로운 mission item 설정
 	 * Set new mission items
 	 */
 	void set_mission_items();
 
 	/**
+	 * 현재 상태에서 수직 이륙이 필요한지 체크
 	 * Returns true if we need to do a takeoff at the current state
 	 */
 	bool do_need_vertical_takeoff();
 
 	/**
+	 * 착륙을 시작하기 전에 waypoint 위치로 이동이 필요한지 여부 체크
 	 * Returns true if we need to move to waypoint location before starting descent
 	 */
 	bool do_need_move_to_land();
@@ -140,41 +146,50 @@ private:
 	bool do_need_move_to_takeoff();
 
 	/**
+	 * sp가 유효한 경우 sp의 위치 정보를 복사하고 그렇지 않으면 현재 위치를 복사
 	 * Copies position from setpoint if valid, otherwise copies current position
 	 */
 	void copy_position_if_valid(struct mission_item_s *mission_item, struct position_setpoint_s *setpoint);
 
 	/**
+	 * 다음 waypoint으로 향하기 위해서 mission item을 생성
 	 * Create mission item to align towards next waypoint
 	 */
 	void set_align_mission_item(struct mission_item_s *mission_item, struct mission_item_s *mission_item_next);
 
 	/**
+	 * 이륙 높이를 계산해서 mission item에 설정
 	 * Calculate takeoff height for mission item considering ground clearance
 	 */
 	float calculate_takeoff_altitude(struct mission_item_s *mission_item);
 
 	/**
+	 * 비행체의 heading 업데이트
 	 * Updates the heading of the vehicle. Rotary wings only.
 	 */
 	void heading_sp_update();
 
 	/**
+	 * 고도 sp를 설정하는데 있어서 foh 기법 사용
 	 * Updates the altitude sp to follow a foh
 	 */
 	void altitude_sp_foh_update();
 
 	/**
+	 * 속도 sp 업데이트
 	 * Update the cruising speed setpoint.
 	 */
 	void cruising_speed_sp_update();
 
 	/**
+	 * 착륙 취소 동작
 	 * Abort landing
 	 */
 	void do_abort_landing();
 
 	/**
+	 * 현재 및 다음 mission을 읽기. 다음 mission에 position을 가지고 있는지 보기.
+	 * 현재 item이 유효하면 true을 반환.
 	 * Read the current and the next mission item. The next mission item read is the
 	 * next mission item that contains a position.
 	 *
@@ -184,6 +199,8 @@ private:
 				   mission_item_s *next_position_mission_item, bool *has_next_position_item);
 
 	/**
+	 * dm으로부터 현재 item index로부터 offset에 해당되는 mission item을 읽음.
+	 * DO_JUMPS가 있는지 살펴보기.
 	 * Read current (offset == 0) or a specific (offset > 0) mission item
 	 * from the dataman and watch out for DO_JUMPS
 	 *
@@ -192,51 +209,61 @@ private:
 	bool read_mission_item(int offset, struct mission_item_s *mission_item);
 
 	/**
+	 * 현재 mission state를 data에 저장
 	 * Save current offboard mission state to dataman
 	 */
 	void save_offboard_mission_state();
 
 	/**
+	 * DO_JUMP 후에 변경된 mission에 대해서 알림
 	 * Inform about a changed mission item after a DO_JUMP
 	 */
 	void report_do_jump_mission_changed(int index, int do_jumps_remaining);
 
 	/**
+	 * 현재 mission이 완료되었음을 설정
 	 * Set a mission item as reached
 	 */
 	void set_mission_item_reached();
 
 	/**
+	 * 현재 mission item을 _current_offboard_mission_index로 설정
 	 * Set the current offboard mission item
 	 */
 	void set_current_offboard_mission_item();
 
 	/**
+	 * mission을 시작할 준비가 되었는지 검사 
 	 * Check whether a mission is ready to go
 	 */
 	void check_mission_valid(bool force);
 
 	/**
+	 * mission을 리셋
 	 * Reset offboard mission
 	 */
 	void reset_offboard_mission(struct mission_s &mission);
 
 	/**
+	 * mission을 리셋해야하는 경우 true 반환
 	 * Returns true if we need to reset the mission
 	 */
 	bool need_to_reset_mission(bool active);
 
 	/**
+	 * 현재 위치와 yaw 방향을 가지고 진행할 곳의 sp를 값을 구하기
 	 * Project current location with heading to far away location and fill setpoint.
 	 */
 	void generate_waypoint_from_heading(struct position_setpoint_s *setpoint, float yaw);
 
 	/**
+	 * DO_LAND_START의 index를 찾아서 저장. (failsafe시 바로 사용할 수 있게 하기 위해서.)
 	 * Find and store the index of the landing sequence (DO_LAND_START)
 	 */
 	bool find_offboard_land_start();
 
 	/**
+	 * 현재 위치를 기준으로 가장 가까운 위치의 mission index을 반환
 	 * Return the index of the closest offboard mission item to the current global position.
 	 */
 	int32_t index_closest_mission_item() const;
