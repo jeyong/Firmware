@@ -70,6 +70,7 @@ GpsFailure::on_inactive()
 void
 GpsFailure::on_activation()
 {
+	//시작되면 NONE으로 상태를 설정하고 	
 	_gpsf_state = GPSF_STATE_NONE;
 	_timestamp_activation = hrt_absolute_time();
 	advance_gpsf();
@@ -92,10 +93,12 @@ GpsFailure::on_active()
 			att_sp.pitch_body = math::radians(_param_openlooploiter_pitch.get());
 			att_sp.thrust = _param_openlooploiter_thrust.get();
 
+			// 오일러 roll, pitch, yaw(0)을 Quaternion으로 변환하는 이유는 attitude sp가 Quaternion으로 받기 때문이며 복사하여 사용.		
 			Quatf q(Eulerf(att_sp.roll_body, att_sp.pitch_body, 0.0f));
 			q.copyTo(att_sp.q_d);
 			att_sp.q_d_valid = true;
 
+			// attitude sp를 publish 하기		
 			if (_att_sp_pub != nullptr) {
 				/* publish att sp*/
 				orb_publish(ORB_ID(vehicle_attitude_setpoint), _att_sp_pub, &att_sp);
@@ -127,6 +130,7 @@ GpsFailure::on_active()
 	}
 }
 
+// gpsf 상태에서는 position control를 사용하지 않으므로 pos sp를 모두 invalid 상태로 설정
 // gpsf 상태에서는 mission item을 설정하지 않고 pos의 prev, cur, next를 모두 false로 설정.
 void
 GpsFailure::set_gpsf_item()
@@ -161,16 +165,16 @@ GpsFailure::advance_gpsf()
 {
 	switch (_gpsf_state) {
 	case GPSF_STATE_NONE:
-		_gpsf_state = GPSF_STATE_LOITER;
+		_gpsf_state = GPSF_STATE_LOITER;  //None -> Loiter 상태로 전환
 		mavlink_log_critical(_navigator->get_mavlink_log_pub(), "Global position failure: fixed bank loiter");
 		break;
 
 	case GPSF_STATE_LOITER:
-		_gpsf_state = GPSF_STATE_TERMINATE;
+		_gpsf_state = GPSF_STATE_TERMINATE; // Loiter -> Terminate 상태로 전환
 		mavlink_log_emergency(_navigator->get_mavlink_log_pub(), "no GPS recovery, terminating flight");
 		break;
 
-	case GPSF_STATE_TERMINATE:
+	case GPSF_STATE_TERMINATE:  // Terminate -> End 상태로 전환
 		PX4_WARN("terminate");
 		_gpsf_state = GPSF_STATE_END;
 		break;
