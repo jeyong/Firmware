@@ -68,6 +68,7 @@ Geofence::~Geofence()
 	}
 }
 
+//실제 geofence 를 생성하는데 실제 동작은 _updateFence()에서 구현
 void Geofence::updateFence()
 {
 	// Note: be aware that when calling this, it can block for quite some time, the duration of a geofence transfer.
@@ -83,6 +84,7 @@ void Geofence::updateFence()
 	dm_unlock(DM_KEY_FENCE_POINTS);
 }
 
+// dm에서 fence를 정보를 읽어서 
 void Geofence::_updateFence()
 {
 
@@ -92,8 +94,8 @@ void Geofence::_updateFence()
 	int num_fence_items = 0;
 
 	if (ret == sizeof(mission_stats_entry_s)) {
-		num_fence_items = stats.num_items;
-		_update_counter = stats.update_counter;
+		num_fence_items = stats.num_items;  //item의 수 (이 값만큼 loop돌면서 fence point 정보를 가지고와서 polygon 만들기 )
+		_update_counter = stats.update_counter; //update 횟수
 	}
 
 	// iterate over all polygons and store their starting vertices
