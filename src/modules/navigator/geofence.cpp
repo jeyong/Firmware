@@ -180,16 +180,19 @@ void Geofence::_updateFence()
 
 }
 
+// gpos가 기준 geofence를 지키는지 검사
 bool Geofence::checkAll(const struct vehicle_global_position_s &global_position)
 {
 	return checkAll(global_position.lat, global_position.lon, global_position.alt);
 }
 
+// gpos와 지정한 고도가 geofence를 지키는지 검사
 bool Geofence::checkAll(const struct vehicle_global_position_s &global_position, const float alt)
 {
 	return checkAll(global_position.lat, global_position.lon, alt);
 }
 
+// 설정한 고도 모드나 소드에 따라서 gpos나 gps_pos 중에 하나를 선택함
 bool Geofence::check(const vehicle_global_position_s &global_position, const vehicle_gps_position_s &gps_position,
 		     const home_position_s home_pos, bool home_position_set)
 {
@@ -202,7 +205,7 @@ bool Geofence::check(const vehicle_global_position_s &global_position, const veh
 					(double)gps_position.alt * 1.0e-3);
 		}
 
-	} else {
+	} else { //GF_ALT_MODE_WGS84 고도를 사용하지 않는 경우, baro 고도를 사용
 		// get baro altitude
 		_sub_airdata.update();
 		const float baro_altitude_amsl = _sub_airdata.get().baro_alt_meter;
@@ -216,17 +219,21 @@ bool Geofence::check(const vehicle_global_position_s &global_position, const veh
 	}
 }
 
+//mission item기준으로 geofence 벗어나는지 검사
 bool Geofence::check(const struct mission_item_s &mission_item)
 {
 	return checkAll(mission_item.lat, mission_item.lon, mission_item.altitude);
 }
 
+//lat, lon, 고도를 인자로 주고 geofence 벗어나는지 조사
 bool Geofence::checkAll(double lat, double lon, float altitude)
 {
 	bool inside_fence = true;
 
+	// home pos가 제공되는 경우
 	if (isHomeRequired() && _navigator->home_position_valid()) {
 
+		// home으로부터의 허용하는 최대 수평, 수직 거리
 		const float max_horizontal_distance = _param_max_hor_distance.get();
 		const float max_vertical_distance = _param_max_ver_distance.get();
 
@@ -237,8 +244,10 @@ bool Geofence::checkAll(double lat, double lon, float altitude)
 		float dist_xy = -1.0f;
 		float dist_z = -1.0f;
 
+		// home pos에서 현재 pos까지의 수평, 수직 거리 구하기 
 		get_distance_to_point_global_wgs84(lat, lon, altitude, home_lat, home_lon, home_alt, &dist_xy, &dist_z);
 
+		// 허용 수직거리보다 더 멀리 떨어진 경우. 고도가 벗어났다고 mavlink 메시지로 알림.
 		if (max_vertical_distance > FLT_EPSILON && (dist_z > max_vertical_distance)) {
 			if (hrt_elapsed_time(&_last_vertical_range_warning) > GEOFENCE_RANGE_WARNING_LIMIT) {
 				mavlink_log_critical(_navigator->get_mavlink_log_pub(), "Maximum altitude above home exceeded by %.1f m",
@@ -249,6 +258,7 @@ bool Geofence::checkAll(double lat, double lon, float altitude)
 			inside_fence = false;
 		}
 
+		// 허용 수평거리보다 더 멀리 떨어진 경우. 거리가 벗어난 경우 mavlink 메시지로 알림.
 		if (max_horizontal_distance > FLT_EPSILON && (dist_xy > max_horizontal_distance)) {
 			if (hrt_elapsed_time(&_last_horizontal_range_warning) > GEOFENCE_RANGE_WARNING_LIMIT) {
 				mavlink_log_critical(_navigator->get_mavlink_log_pub(), "Maximum distance from home exceeded by %.1f m",
@@ -260,6 +270,7 @@ bool Geofence::checkAll(double lat, double lon, float altitude)
 		}
 	}
 
+	// 기본적으로 home과 허용하는 거리 내에 있으면서 polygon 내ㅇ에도 있어야 true가 됨.
 	// to be inside the geofence both fences have to report being inside
 	// as they both report being inside when not enabled
 	inside_fence = inside_fence && checkPolygons(lat, lon, altitude);
@@ -271,6 +282,7 @@ bool Geofence::checkAll(double lat, double lon, float altitude)
 	} else {
 		_outside_counter++;
 
+		// 여러 polygon 에서 몇 번 fence를 벗어난 횟수가 허용 범위 내에 있는지 체크
 		if (_outside_counter > _param_counter_threshold.get()) {
 			return inside_fence;
 
@@ -280,7 +292,7 @@ bool Geofence::checkAll(double lat, double lon, float altitude)
 	}
 }
 
-
+//lat, lon, 고도를 인자로 주고 이 지점이 벗어나는지 여부 조사
 bool Geofence::checkPolygons(double lat, double lon, float altitude)
 {
 	// the following uses dm_read, so first we try to lock all items. If that fails, it (most likely) means
@@ -289,6 +301,7 @@ bool Geofence::checkPolygons(double lat, double lon, float altitude)
 		return true;
 	}
 
+	// fence 정보가 업데이트 되었는지 검사하여 최신 fence정보로 업데이트. dm의 update_counter값과 변수값 비교해서 다르면 다시 fence 정보를 업데이트 한다.
 	// we got the lock, now check if the fence data got updated
 	mission_stats_entry_s stats;
 	int ret = dm_read(DM_KEY_FENCE_POINTS, 0, &stats, sizeof(mission_stats_entry_s));
@@ -303,6 +316,7 @@ bool Geofence::checkPolygons(double lat, double lon, float altitude)
 		return true;
 	}
 
+	// 인자로 받은 고도가 범위를 벗어나면 false 반환
 	/* Vertical check */
 	if (_altitude_max > _altitude_min) { // only enable vertical check if configured properly
 		if (altitude > _altitude_max || altitude < _altitude_min) {
@@ -317,6 +331,7 @@ bool Geofence::checkPolygons(double lat, double lon, float altitude)
 	bool inside_inclusion = false;
 	bool had_inclusion_areas = false;
 
+	// insideCircle(), insidePolygon() 사용해서 내부 여부 확인하고 이 결과를 반환
 	for (int polygon_idx = 0; polygon_idx < _num_polygons; ++polygon_idx) {
 		if (_polygons[polygon_idx].fence_type == NAV_CMD_FENCE_CIRCLE_INCLUSION) {
 			bool inside = insideCircle(_polygons[polygon_idx], lat, lon, altitude);
@@ -444,6 +459,7 @@ Geofence::valid()
 	return true; // always valid
 }
 
+// sd카드 /etc/geofence.txt 에 파일 넣어두면 이 파일을 읽어서 dm에 넣어줌
 int
 Geofence::loadFromFile(const char *filename)
 {
@@ -454,11 +470,12 @@ Geofence::loadFromFile(const char *filename)
 	const char commentChar = '#';
 	int rc = PX4_ERROR;
 
+	// dm 삭제
 	/* Make sure no data is left in the datamanager */
 	clearDm();
 
 	/* open the mixer definition file */
-	fp = fopen(GEOFENCE_FILENAME, "r");
+	fp = fopen(GEOFENCE_FILENAME, "r"); // /etc/geofence.txt 위치
 
 	if (fp == nullptr) {
 		return PX4_ERROR;
@@ -487,6 +504,7 @@ Geofence::loadFromFile(const char *filename)
 		}
 
 		if (gotVertical) {
+			// 라인을 읽으면 그 값으로 geofence의 지점
 			/* Parse the line as a geofence point */
 			mission_fence_point_s vertex;
 			vertex.frame = NAV_FRAME_GLOBAL;
@@ -494,6 +512,8 @@ Geofence::loadFromFile(const char *filename)
 			vertex.vertex_count = 0; // this will be filled in a second pass
 			vertex.alt = 0; // alt is not used
 
+			// 라인 시작이 'DMS'로 시작. 도, 분, 초로 구성되었다는 뜻이므로 6개 읽기 
+			// 파일에서 읽은 값을 vertex 변수에 넣으면 dm_write에서 vertex 변수 내용을 dm에 쓰게 됨.
 			/* if the line starts with DMS, this means that the coordinate is given as degree minute second instead of decimal degrees */
 			if (line[textStart] == 'D' && line[textStart + 1] == 'M' && line[textStart + 2] == 'S') {
 				/* Handle degree minute second format */
@@ -504,19 +524,19 @@ Geofence::loadFromFile(const char *filename)
 					goto error;
 				}
 
-//				PX4_INFO("Geofence DMS: %.5lf %.5lf %.5lf ; %.5lf %.5lf %.5lf", lat_d, lat_m, lat_s, lon_d, lon_m, lon_s);
+				// PX4_INFO("Geofence DMS: %.5lf %.5lf %.5lf ; %.5lf %.5lf %.5lf", lat_d, lat_m, lat_s, lon_d, lon_m, lon_s);
 
 				vertex.lat = lat_d + lat_m / 60.0 + lat_s / 3600.0;
 				vertex.lon = lon_d + lon_m / 60.0 + lon_s / 3600.0;
 
-			} else {
+			} else { // DMS로 시작하지 않는 경우 lat, lon으로 2개만 읽음
 				/* Handle decimal degree format */
 				if (sscanf(line, "%lf %lf", &vertex.lat, &vertex.lon) != 2) {
 					PX4_ERR("Scanf to parse geofence vertex failed.");
 					goto error;
 				}
 			}
-
+			// vertex 변수의 값을 dm에 저장 
 			if (dm_write(DM_KEY_FENCE_POINTS, pointCounter + 1, DM_PERSIST_POWER_ON_RESET, &vertex,
 				     sizeof(vertex)) != sizeof(vertex)) {
 				goto error;
@@ -524,9 +544,9 @@ Geofence::loadFromFile(const char *filename)
 
 			PX4_INFO("Geofence: point: %d, lat %.5lf: lon: %.5lf", pointCounter, vertex.lat, vertex.lon);
 
-			pointCounter++;
+			pointCounter++; //파일에서 읽은 지점의 갯수 카운트
 
-		} else {
+		} else { //goVertical은 무조건 여기 들어온다. 즉 파일의 시작에 바로 min/max를 먼저 읽어서 설정.
 			/* Parse the line as the vertical limits */
 			if (sscanf(line, "%f %f", &_altitude_min, &_altitude_max) != 2) {
 				goto error;
@@ -537,24 +557,26 @@ Geofence::loadFromFile(const char *filename)
 		}
 	}
 
-
+	// 정상적으로 sd카드에서 dm으로 쓰기 성공
 	/* Check if import was successful */
 	if (gotVertical && pointCounter > 2) {
 		mavlink_log_info(_navigator->get_mavlink_log_pub(), "Geofence imported");
 		rc = PX4_OK;
 
+		// 정상적으로 dm에 들어갔으므로 이번에는 vertex_count를 증가시켜주고 나서 다시 저장
 		/* do a second pass, now that we know the number of vertices */
 		for (int seq = 1; seq <= pointCounter; ++seq) {
 			mission_fence_point_s mission_fence_point;
 
 			if (dm_read(DM_KEY_FENCE_POINTS, seq, &mission_fence_point, sizeof(mission_fence_point_s)) ==
 			    sizeof(mission_fence_point_s)) {
-				mission_fence_point.vertex_count = pointCounter;
+				mission_fence_point.vertex_count = pointCounter; //vertex_count 증가
 				dm_write(DM_KEY_FENCE_POINTS, seq, DM_PERSIST_POWER_ON_RESET, &mission_fence_point,
 					 sizeof(mission_fence_point_s));
 			}
 		}
 
+		// 최종적으로 polygon 갯수 정보 가지고 있는 stat도 DM_PERSIST_POWER_ON_RESET 속성 추가하기
 		mission_stats_entry_s stats;
 		stats.num_items = pointCounter;
 		rc = dm_write(DM_KEY_FENCE_POINTS, 0, DM_PERSIST_POWER_ON_RESET, &stats, sizeof(mission_stats_entry_s));
@@ -571,6 +593,7 @@ error:
 	return rc;
 }
 
+//fence 정보 삭제
 int Geofence::clearDm()
 {
 	dm_clear(DM_KEY_FENCE_POINTS);
@@ -578,6 +601,7 @@ int Geofence::clearDm()
 	return PX4_OK;
 }
 
+// home기주느 최대 수평, 수직 거리가 설정되어 있으므로 home위치를 알아야 가능. 그래서 home이 필요함
 bool Geofence::isHomeRequired()
 {
 	bool max_horizontal_enabled = (_param_max_hor_distance.get() > FLT_EPSILON);
@@ -587,28 +611,29 @@ bool Geofence::isHomeRequired()
 	return max_horizontal_enabled || max_vertical_enabled || geofence_action_rtl;
 }
 
+// 상태 출력 - polygon의 수와 vertex의 수를 출력
 void Geofence::printStatus()
 {
 	int num_inclusion_polygons = 0, num_exclusion_polygons = 0, total_num_vertices = 0;
 	int num_inclusion_circles = 0, num_exclusion_circles = 0;
 
 	for (int i = 0; i < _num_polygons; ++i) {
-		total_num_vertices += _polygons[i].vertex_count;
+		total_num_vertices += _polygons[i].vertex_count; // vertex 수를 계속 더함
 
 		if (_polygons[i].fence_type == NAV_CMD_FENCE_POLYGON_VERTEX_INCLUSION) {
-			++num_inclusion_polygons;
+			++num_inclusion_polygons; // 다각형 내부인 경우 증가
 		}
 
 		if (_polygons[i].fence_type == NAV_CMD_FENCE_POLYGON_VERTEX_EXCLUSION) {
-			++num_exclusion_polygons;
+			++num_exclusion_polygons; // 다각형 외부인 경우 증가
 		}
 
 		if (_polygons[i].fence_type == NAV_CMD_FENCE_CIRCLE_INCLUSION) {
-			++num_inclusion_circles;
+			++num_inclusion_circles; // 원 내부인 경우 증가
 		}
 
 		if (_polygons[i].fence_type == NAV_CMD_FENCE_CIRCLE_EXCLUSION) {
-			++num_exclusion_circles;
+			++num_exclusion_circles; // 원 외부인 경우 증가
 		}
 	}
 
