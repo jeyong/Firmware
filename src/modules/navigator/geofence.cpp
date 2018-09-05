@@ -84,7 +84,8 @@ void Geofence::updateFence()
 	dm_unlock(DM_KEY_FENCE_POINTS);
 }
 
-// dm에서 fence를 정보를 읽어서 
+// dm에서 fence를 정보를 읽어서 _polygons 에 각 다각형의 정보를 저장. _polygons에는 첫번째 다각형의 좌표정보, vertex의 수를 저장해 둔다.
+// 추후 각 다각형의 첫번째 vertex 정보로 해당 다각형의 정보를 구성할 수 있다.
 void Geofence::_updateFence()
 {
 
@@ -103,6 +104,7 @@ void Geofence::_updateFence()
 	_num_polygons = 0;
 	int current_seq = 1;
 
+	// 각 geofence의 시작 vertex을 저장.
 	while (current_seq <= num_fence_items) {
 		mission_fence_point_s mission_fence_point;
 		bool is_circle_area = false;
@@ -156,13 +158,13 @@ void Geofence::_updateFence()
 				polygon.dataman_index = current_seq;
 				polygon.fence_type = mission_fence_point.nav_cmd;
 
-				if (is_circle_area) {
+				if (is_circle_area) { // 원인 경우 원의 반경 값을 추가
 					polygon.circle_radius = mission_fence_point.circle_radius;
 					current_seq += 1;
 
-				} else {
+				} else { //다각형인 경우 vertex가 몇 개 인지 추가
 					polygon.vertex_count = mission_fence_point.vertex_count;
-					current_seq += mission_fence_point.vertex_count;
+					current_seq += mission_fence_point.vertex_count; //current_seq 값을 vertex의 수만큼 건너뛰게 해서 다음 다각형의 첫번째 vertex를 가져온다.
 				}
 
 				++_num_polygons;
@@ -316,7 +318,7 @@ bool Geofence::checkPolygons(double lat, double lon, float altitude)
 		return true;
 	}
 
-	// 인자로 받은 고도가 범위를 벗어나면 false 반환
+	// 수직 거리 검사 : 인자로 받은 고도가 범위를 벗어나면 false 반환
 	/* Vertical check */
 	if (_altitude_max > _altitude_min) { // only enable vertical check if configured properly
 		if (altitude > _altitude_max || altitude < _altitude_min) {
@@ -331,7 +333,7 @@ bool Geofence::checkPolygons(double lat, double lon, float altitude)
 	bool inside_inclusion = false;
 	bool had_inclusion_areas = false;
 
-	// insideCircle(), insidePolygon() 사용해서 내부 여부 확인하고 이 결과를 반환
+	// geofence 개수만큼 반복. insideCircle(), insidePolygon() 사용해서 내부 여부 확인하고 이 결과를 반환
 	for (int polygon_idx = 0; polygon_idx < _num_polygons; ++polygon_idx) {
 		if (_polygons[polygon_idx].fence_type == NAV_CMD_FENCE_CIRCLE_INCLUSION) {
 			bool inside = insideCircle(_polygons[polygon_idx], lat, lon, altitude);
