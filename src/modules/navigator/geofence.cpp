@@ -88,6 +88,7 @@ void Geofence::updateFence()
 void Geofence::_updateFence()
 {
 
+	// fence 정보 가지고 오기 (geofence item 갯수를 알아야 loop 횟수를 알 수 있음)
 	// initialize fence points count
 	mission_stats_entry_s stats;
 	int ret = dm_read(DM_KEY_FENCE_POINTS, 0, &stats, sizeof(mission_stats_entry_s));
@@ -356,8 +357,10 @@ bool Geofence::checkPolygons(double lat, double lon, float altitude)
 	return (!had_inclusion_areas || inside_inclusion) && outside_exclusion;
 }
 
+// polygon 구조체로 geofence의 각 vertex(lat, lon, 고도 등) 정보를 읽어와서 인자로 받은 lat, lon, 고도가 fence 내부인지 여부 확인
 bool Geofence::insidePolygon(const PolygonInfo &polygon, double lat, double lon, float altitude)
 {
+	//PNPOLY 알고리즘 이용해서 각 vertex의 좌표를 가지고 인자로 받은 lat, lon, 고도가 fence내에 포함되는지 여부를 확인
 
 	/* Adaptation of algorithm originally presented as
 	 * PNPOLY - Point Inclusion in Polygon Test
@@ -369,12 +372,15 @@ bool Geofence::insidePolygon(const PolygonInfo &polygon, double lat, double lon,
 	mission_fence_point_s temp_vertex_j;
 	bool c = false;
 
+	// vertex의 처음 인덱스부터 증가, vertex의 마지막 인덱스부터 감소 시키는 방식으로 2개 vertex를 읽어서 처리
 	for (unsigned i = 0, j = polygon.vertex_count - 1; i < polygon.vertex_count; j = i++) {
+		//dm에서 앞쪽 vertex 읽기
 		if (dm_read(DM_KEY_FENCE_POINTS, polygon.dataman_index + i, &temp_vertex_i,
 			    sizeof(mission_fence_point_s)) != sizeof(mission_fence_point_s)) {
 			break;
 		}
 
+		//dm에서 뒤쪽 vertex 읽기
 		if (dm_read(DM_KEY_FENCE_POINTS, polygon.dataman_index + j, &temp_vertex_j,
 			    sizeof(mission_fence_point_s)) != sizeof(mission_fence_point_s)) {
 			break;
@@ -388,6 +394,7 @@ bool Geofence::insidePolygon(const PolygonInfo &polygon, double lat, double lon,
 			break;
 		}
 
+		//lon이 i와 j의 vertex 사이에 있어야 하고, ....
 		if (((double)temp_vertex_i.lon >= lon) != ((double)temp_vertex_j.lon >= lon) &&
 		    (lat <= (double)(temp_vertex_j.lat - temp_vertex_i.lat) * (lon - (double)temp_vertex_i.lon) /
 		     (double)(temp_vertex_j.lon - temp_vertex_i.lon) + (double)temp_vertex_i.lat)) {
@@ -398,6 +405,7 @@ bool Geofence::insidePolygon(const PolygonInfo &polygon, double lat, double lon,
 	return c;
 }
 
+// 원 내부에 있는지 검사
 bool Geofence::insideCircle(const PolygonInfo &polygon, double lat, double lon, float altitude)
 {
 
@@ -417,14 +425,16 @@ bool Geofence::insideCircle(const PolygonInfo &polygon, double lat, double lon, 
 		return false;
 	}
 
+	// 인자로 받은 lat, lon으로 ref 만들고
 	if (!map_projection_initialized(&_projection_reference)) {
 		map_projection_init(&_projection_reference, lat, lon);
 	}
 
 	float x1, y1, x2, y2;
-	map_projection_project(&_projection_reference, lat, lon, &x1, &y1);
-	map_projection_project(&_projection_reference, circle_point.lat, circle_point.lon, &x2, &y2);
-	float dx = x1 - x2, dy = y1 - y2;
+	map_projection_project(&_projection_reference, lat, lon, &x1, &y1); //lat, lon 기준이므로 거
+	map_projection_project(&_projection_reference, circle_point.lat, circle_point.lon, &x2, &y2); // 원의 특정 지점의 lat, lon 까지의 x, y 좌표
+	float dx = x1 - x2, dy = y1 - y2; //현재 lat, lon 기준으로 원테두리 까지의 x, y 차이 구하기  
+	//원점 기준으로의 거리가 반경 이내 인지 체크 (루트연산을 하지 않기 위해서 그냥 반경을 곱했음. )
 	return dx * dx + dy * dy < circle_point.circle_radius * circle_point.circle_radius;
 }
 
