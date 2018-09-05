@@ -540,7 +540,7 @@ MissionFeasibilityChecker::checkDistanceToFirstWaypoint(const mission_s &mission
 	return true;
 }
 
-// waypoint들 사이의 거리를 검사 
+// 연속하는 waypoint들 사이의 거리가 최대 허용 거리를 넘어서지 않는지 검사 
 bool
 MissionFeasibilityChecker::checkDistancesBetweenWaypoints(const mission_s &mission, float max_distance)
 {
