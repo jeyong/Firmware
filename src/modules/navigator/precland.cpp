@@ -68,6 +68,7 @@ PrecLand::PrecLand(Navigator *navigator) :
 void
 PrecLand::on_activation()
 {
+	//landing_target_pose를 수신
 	// We need to subscribe here and not in the constructor because constructor is called before the navigator task is spawned
 	if (_target_pose_sub < 0) {
 		_target_pose_sub = orb_subscribe(ORB_ID(landing_target_pose));
@@ -77,6 +78,7 @@ PrecLand::on_activation()
 	_search_cnt = 0;
 	_last_slewrate_time = 0;
 
+	// local pos를 projection의 기준으로 설정
 	vehicle_local_position_s *vehicle_local_position = _navigator->get_local_position();
 
 	if (!map_projection_initialized(&_map_ref)) {
@@ -87,6 +89,7 @@ PrecLand::on_activation()
 
 	pos_sp_triplet->next.valid = false;
 
+	// 현재 위치가 유효하지 않은 경우, prcland하지 말고 그냥 현재 위치에 착륙하도록
 	// Check that the current position setpoint is valid, otherwise land at current position
 	if (!pos_sp_triplet->current.valid) {
 		PX4_WARN("Resetting landing position to current position");
@@ -125,6 +128,7 @@ PrecLand::on_active()
 		switch_to_state_done();
 	}
 
+	// 각 state에 따라 해당 state에서 수행해야하는 method를 호출
 	switch (_state) {
 	case PrecLandState::Start:
 		run_state_start();
@@ -325,22 +329,27 @@ PrecLand::run_state_final_approach()
 	// nothing to do, will land
 }
 
+// search 상태 실행하기
 void
 PrecLand::run_state_search()
 {
+	// 수평 접근 상태가 가능하다면 타겟을 찾았다는 뜻이다. 따라서 타겟을 찾은 시간, sp 찾지 못했다면 
 	// check if we can see the target
 	if (check_state_conditions(PrecLandState::HorizontalApproach)) {
 		if (!_target_acquired_time) {
+			// 너무 갑자기 정지하게 하지 않기 위해서 마진을 줬음. 1m. 탐색 모드로 되면 탐색 고도로 올라가기 때문에 이를 부드럽게 멈추게 해야함. 
 			// target just became visible. Stop climbing, but give it some margin so we don't stop too apruptly
 			_target_acquired_time = hrt_absolute_time();
 			position_setpoint_triplet_s *pos_sp_triplet = _navigator->get_position_setpoint_triplet();
-			float new_alt = _navigator->get_global_position()->alt + 1.0f;
+			float new_alt = _navigator->get_global_position()->alt + 1.0f; // 고도 값이 너무 타이트하면 갑자기 멈추니까. 대략 1m 마진을 줬음.
+			//고도는 작은 값을 선택함. 착륙모드라 내려가야하니까 괜히 상승하는 것은 바람직하지 않음.
 			pos_sp_triplet->current.alt = new_alt < pos_sp_triplet->current.alt ? new_alt : pos_sp_triplet->current.alt;
 			_navigator->set_position_setpoint_triplet_updated();
 		}
 
 	}
 
+	// 해당 위치에서 안정을 찾도록 1초 동안 해당 높이에서 머무르고 나서 수평 이동 모드로 전환되도록 함.
 	// stay at that height for a second to allow the vehicle to settle
 	if (_target_acquired_time && (hrt_absolute_time() - _target_acquired_time) > 1000000) {
 		// try to switch to horizontal approach
@@ -349,6 +358,7 @@ PrecLand::run_state_search()
 		}
 	}
 
+	// 검색 타임아웃이 경우 일반 착륙으로 전환
 	// check if search timed out and go to fallback
 	if (hrt_absolute_time() - _state_start_time > _param_search_timeout.get()*SEC2USEC) {
 		PX4_WARN("Search timed out");
@@ -369,7 +379,7 @@ PrecLand::run_state_fallback()
 bool
 PrecLand::switch_to_state_start()
 {
-	// Start 상태로 전환 가능한지 체크하고 가능하면 sp의 타입을 SETPOINT_TYPE_POSITION로 설정
+	// Start 상태인지 체크. 맞으면 sp의 타입을 SETPOINT_TYPE_POSITION로 설정
 	if (check_state_conditions(PrecLandState::Start)) {
 		position_setpoint_triplet_s *pos_sp_triplet = _navigator->get_position_setpoint_triplet();
 		pos_sp_triplet->current.type = position_setpoint_s::SETPOINT_TYPE_POSITION;
@@ -386,7 +396,7 @@ PrecLand::switch_to_state_start()
 	return false;
 }
 
-// 수평 접근 상태로 전환이 가능한 상태인 경우 현재 고도를 approach_alt로 설정
+// 수평 접근 상태로 전환이 가능한 상태인 수평접근 상태로 설정하고 현재 고도를 approach_alt로 설정
 bool
 PrecLand::switch_to_state_horizontal_approach()
 {
@@ -403,7 +413,7 @@ PrecLand::switch_to_state_horizontal_approach()
 	return false;
 }
 
-//타겟 위에서 하강아 가능한 상태로 전환이 가능한 상태인 경우 상태를 DescendAboveTarget로 설정
+//타겟 위에서 하강이 가능한 상태로 전환이 가능한 상태인 경우 상태를 DescendAboveTarget로 설정
 bool
 PrecLand::switch_to_state_descend_above_target()
 {
@@ -465,6 +475,7 @@ PrecLand::switch_to_state_fallback()
 	return true;
 }
 
+// Done 상태로 전환
 bool
 PrecLand::switch_to_state_done()
 {
@@ -473,16 +484,17 @@ PrecLand::switch_to_state_done()
 	return true;
 }
 
+// 현재 인자로 준 상태에 들어갈 수 있는지 여부를 검사
 bool PrecLand::check_state_conditions(PrecLandState state)
 {
 	vehicle_local_position_s *vehicle_local_position = _navigator->get_local_position();
 
 	switch (state) {
-	case PrecLandState::Start:
+	case PrecLandState::Start: // 검색 횟수 <= 최대 검색 횟수 인 경우 true
 		return _search_cnt <= _param_max_searches.get();
 
-	case PrecLandState::HorizontalApproach:
-
+	case PrecLandState::HorizontalApproach: // 수평 접근
+		// 
 		// if we're already in this state, only want to make it invalid if we reached the target but can't see it anymore
 		if (_state == PrecLandState::HorizontalApproach) {
 			if (fabsf(_target_pose.x_abs - vehicle_local_position->x) < _param_hacc_rad.get()
@@ -500,33 +512,36 @@ bool PrecLand::check_state_conditions(PrecLandState state)
 		// If we're trying to switch to this state, the target needs to be visible
 		return _target_pose_updated && _target_pose_valid && _target_pose.abs_pos_valid;
 
-	case PrecLandState::DescendAboveTarget:
+	case PrecLandState::DescendAboveTarget: // 타겟 위에서 하강
 
+		// 현재 이미 DescendAboveTarget 상태인 경우, 
 		// if we're already in this state, only leave it if target becomes unusable, don't care about horizontall offset to target
 		if (_state == PrecLandState::DescendAboveTarget) {
+			// 다음 단계인 최종 접근이 가능한 상태라면, 0.5초도 안지났는데 최종 접근이 가능한 상태니까 
 			// if we're close to the ground, we're more critical of target timeouts so we quickly go into descend
 			if (check_state_conditions(PrecLandState::FinalApproach)) {
 				return hrt_absolute_time() - _target_pose.timestamp < 500000; // 0.5s
 
-			} else {
+			} else { // 
 				return _target_pose_valid && _target_pose.abs_pos_valid;
 			}
 
-		} else {
+		} else { //DescendAboveTarget 상태가 아닌 경우
+			// 수평 허용 범위내에 있으면 DescendAboveTarget 상태로 전환이 가능하다. 충분히 수평 위치에 가깝제 접근했으니 이제 하강만 하면 된다.
 			// if not already in this state, need to be above target to enter it
 			return _target_pose_updated && _target_pose.abs_pos_valid
 			       && fabsf(_target_pose.x_abs - vehicle_local_position->x) < _param_hacc_rad.get()
 			       && fabsf(_target_pose.y_abs - vehicle_local_position->y) < _param_hacc_rad.get();
 		}
 
-	case PrecLandState::FinalApproach:
+	case PrecLandState::FinalApproach: // 최종 접근
 		return _target_pose_valid && _target_pose.abs_pos_valid
 		       && (_target_pose.z_abs - vehicle_local_position->z) < _param_final_approach_alt.get();
 
-	case PrecLandState::Search:
+	case PrecLandState::Search: // 타겟 검색 중
 		return true;
 
-	case PrecLandState::Fallback:
+	case PrecLandState::Fallback: //일반 착륙 모드로 
 		return true;
 
 	default:
@@ -545,15 +560,18 @@ void PrecLand::slewrate(float &sp_x, float &sp_y)
 		// bad dt, can't divide by it
 		return;
 	}
-
+	// dt 단위를 sec 단위로 변환
 	dt /= SEC2USEC;
 
+	// precland로 전환되고 처음 slewrate를 실행하는 경우 
 	if (!_last_slewrate_time) {
 		// running the first time since switching to precland
 
+		// 처음에는 dt가 대략 50ms라고 가정
 		// assume dt will be about 50000us
 		dt = 50000 / SEC2USEC;
 
+		// 천천히 전환되도록 하기 위해서 이전 sp 값을 아래와 같이 계산해서 대입. _sp_pev_prev
 		// set a best guess for previous setpoints for smooth transition
 		map_projection_project(&_map_ref, _navigator->get_position_setpoint_triplet()->current.lat,
 				       _navigator->get_position_setpoint_triplet()->current.lon, &_sp_pev(0), &_sp_pev(1));
@@ -563,22 +581,27 @@ void PrecLand::slewrate(float &sp_x, float &sp_y)
 
 	_last_slewrate_time = now;
 
+	// sp speed를 최대 비행 속도로 제한하기
 	// limit the setpoint speed to the maximum cruise speed
 	matrix::Vector2f sp_vel = (sp_curr - _sp_pev) / dt; // velocity of the setpoints
 
+	// 속도(sp_vel)을 가지고 현재의 sp 계산하기(sp_cur)
 	if (sp_vel.length() > _param_xy_vel_cruise.get()) {
 		sp_vel = sp_vel.normalized() * _param_xy_vel_cruise.get();
 		sp_curr = _sp_pev + sp_vel * dt;
 	}
 
+	// sp accel을 최대 accel로 제한하기
 	// limit the setpoint acceleration to the maximum acceleration
 	matrix::Vector2f sp_acc = (sp_curr - _sp_pev * 2 + _sp_pev_prev) / (dt * dt); // acceleration of the setpoints
 
+	// 가속도(sp_acc)를 가지고 현재 sp 계산하기(sp_curr)
 	if (sp_acc.length() > _param_acceleration_hor.get()) {
 		sp_acc = sp_acc.normalized() * _param_acceleration_hor.get();
 		sp_curr = _sp_pev * 2 - _sp_pev_prev + sp_acc * (dt * dt);
 	}
 
+	// 최대 가속도가 주어진 경우 특정 sp에 멈출 수 있도록, sp 속도를 제한
 	// limit the setpoint speed such that we can stop at the setpoint given the maximum acceleration/deceleration
 	float max_spd = sqrtf(_param_acceleration_hor.get() * ((matrix::Vector2f)(_sp_pev - matrix::Vector2f(sp_x,
 			      sp_y))).length());
