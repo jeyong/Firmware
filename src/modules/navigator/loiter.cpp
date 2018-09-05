@@ -54,6 +54,7 @@ Loiter::on_inactive()
 	_loiter_pos_set = false;
 }
 
+//reposition 명령이 들어온 경우 reposition 위치에서 loiter하고 아니면 
 void
 Loiter::on_activation()
 {
@@ -65,6 +66,7 @@ Loiter::on_activation()
 	}
 }
 
+//reposition 명령이 들어온 경우 reposition 위치에서 loiter하고 아니면 
 void
 Loiter::on_active()
 {
@@ -72,6 +74,7 @@ Loiter::on_active()
 		reposition();
 	}
 
+	// armed 상태가 아니면 loiter pos를 설정이 안되어 있는 상태로 표시
 	// reset the loiter position if we get disarmed
 	if (_navigator->get_vstatus()->arming_state != vehicle_status_s::ARMING_STATE_ARMED) {
 		_loiter_pos_set = false;
@@ -81,6 +84,7 @@ Loiter::on_active()
 void
 Loiter::set_loiter_position()
 {
+	// arming도 안되어 있고 착륙 상태인 경우 idle 상태로 설정
 	if (_navigator->get_vstatus()->arming_state != vehicle_status_s::ARMING_STATE_ARMED &&
 	    _navigator->get_land_detected()->landed) {
 
@@ -93,7 +97,7 @@ Loiter::set_loiter_position()
 		_loiter_pos_set = false;
 		return;
 
-	} else if (_loiter_pos_set) {
+	} else if (_loiter_pos_set) { // 이미 loiter pos가 설정되어 있는 경우라면 아래 동작을 할 필요없음.
 		// Already set, nothing to do.
 		return;
 	}
@@ -119,16 +123,19 @@ Loiter::set_loiter_position()
 void
 Loiter::reposition()
 {
+	// armed 상태가 아니면 repositon을 수행할 수 없음
 	// we can't reposition if we are not armed yet
 	if (_navigator->get_vstatus()->arming_state != vehicle_status_s::ARMING_STATE_ARMED) {
 		return;
 	}
 
+	// rep가 유효한 값으로 채워져있다면 rep 위치에서 loiter 하도록 함
 	struct position_setpoint_triplet_s *rep = _navigator->get_reposition_triplet();
 
 	if (rep->current.valid) {
 		// set loiter position based on reposition command
 
+		// rep의 위치 정보를 pos sp에 복사. 현재 위치는 pos sp의 prev에 넣고. 
 		// convert mission item to current setpoint
 		struct position_setpoint_triplet_s *pos_sp_triplet = _navigator->get_position_setpoint_triplet();
 		pos_sp_triplet->current.velocity_valid = false;
@@ -139,15 +146,16 @@ Loiter::reposition()
 		memcpy(&pos_sp_triplet->current, &rep->current, sizeof(rep->current));
 		pos_sp_triplet->next.valid = false;
 
+		// 설정한 yaw 모드에 따라 현재 yaw 유지할지 아니면 rep 기준으로 yaw를 변경할지 결정. 
 		// set yaw (depends on the value of parameter MIS_YAWMODE):
 		// MISSION_YAWMODE_NONE: do not change yaw setpoint
 		// MISSION_YAWMODE_FRONT_TO_WAYPOINT: point to next waypoint
-		if (_param_yawmode.get() != MISSION_YAWMODE_NONE) {
+		if (_param_yawmode.get() != MISSION_YAWMODE_NONE) { //yaw를 변경해야하는 경우
 			float travel_dist = get_distance_to_next_waypoint(_navigator->get_global_position()->lat,
 					    _navigator->get_global_position()->lon,
 					    pos_sp_triplet->current.lat, pos_sp_triplet->current.lon);
 
-			if (travel_dist > 1.0f) {
+			if (travel_dist > 1.0f) { // 1m 이상 이동해야하는 경우에 yaw를 변경. 
 				// calculate direction the vehicle should point to.
 				pos_sp_triplet->current.yaw = get_bearing_to_next_waypoint(
 								      _navigator->get_global_position()->lat,
@@ -156,7 +164,7 @@ Loiter::reposition()
 								      pos_sp_triplet->current.lon);
 			}
 		}
-
+		// loiter 모드로 정상적으로 설정하고 pos sp 업데이트 설정
 		_navigator->set_can_loiter_at_sp(pos_sp_triplet->current.type == position_setpoint_s::SETPOINT_TYPE_LOITER);
 
 		_navigator->set_position_setpoint_triplet_updated();

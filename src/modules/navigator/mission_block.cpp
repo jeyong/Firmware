@@ -285,6 +285,7 @@ MissionBlock::is_mission_item_reached()
 			_time_wp_reached = now;
 
 		} else { // 이외 mission cmd인 경우
+			// 일반 mission item의 경우 허용 반경내에 들어갔는지 여부를 체크. _waypoint_position_reached 값을 true로 설정.
 			/* for normal mission items used their acceptance radius */
 			float mission_acceptance_radius = _navigator->get_acceptance_radius(_mission_item.acceptance_radius);
 
@@ -292,7 +293,7 @@ MissionBlock::is_mission_item_reached()
 			if (mission_acceptance_radius < NAV_EPSILON_POSITION) {
 				mission_acceptance_radius = _navigator->get_acceptance_radius();
 			}
-
+			// vtol인 경우 skip
 			/* for vtol back transition calculate acceptance radius based on time and ground speed */
 			if (_mission_item.vtol_back_transition && !_navigator->get_vstatus()->is_rotary_wing) {
 
@@ -414,7 +415,7 @@ MissionBlock::reset_mission_item_reached()
 	_waypoint_position_reached = false;
 	_waypoint_yaw_reached = false;
 	_time_first_inside_orbit = 0;
-	_time_wp_reached = 0;
+	_time_wp_reached = 0; //waypoint에 도달한 시점
 }
 
 void
