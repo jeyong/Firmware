@@ -284,7 +284,7 @@ private:
 
 	// track location of planned mission landing
 	bool	_land_start_available{false};
-	uint16_t _land_start_index{UINT16_MAX};		/**< index of DO_LAND_START, INVALID_DO_LAND_START if no planned landing */
+	uint16_t _land_start_index{UINT16_MAX};		//dm mission에서 land명령의 index /**< index of DO_LAND_START, INVALID_DO_LAND_START if no planned landing */
 
 	bool _need_takeoff{true};					/**< if true, then takeoff must be performed before going to the first waypoint (if needed) */
 

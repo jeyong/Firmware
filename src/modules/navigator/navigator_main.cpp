@@ -189,6 +189,7 @@ Navigator::run()
 		_geofence.loadFromFile(GEOFENCE_FILENAME);
 	}
 
+	// subscribe하는 topic들
 	/* do subscriptions */
 	_global_pos_sub = orb_subscribe(ORB_ID(vehicle_global_position));
 	_local_pos_sub = orb_subscribe(ORB_ID(vehicle_local_position));
@@ -226,6 +227,7 @@ Navigator::run()
 
 	while (!should_exit()) {
 
+		// local position을 subscribe해야 기본 동작
 		/* wait for up to 1000ms for data */
 		int pret = px4_poll(&fds[0], (sizeof(fds) / sizeof(fds[0])), 1000);
 
@@ -249,6 +251,8 @@ Navigator::run()
 
 		bool updated;
 
+		// gpos나 gps pos를 가져와야 geofence 동작이 가능
+		// GPS로부터 position을 가져오는 경우 source를 GF_SOURCE_GPS로 설정
 		/* gps updated */
 		orb_check(_gps_pos_sub, &updated);
 
@@ -260,6 +264,7 @@ Navigator::run()
 			}
 		}
 
+		// GPS로부터 position을 가져오는 경우 source를 GF_SOURCE_GLOBALPOS로 설정
 		/* global position updated */
 		orb_check(_global_pos_sub, &updated);
 
@@ -271,6 +276,7 @@ Navigator::run()
 			}
 		}
 
+		// parameter 업데이트 
 		/* parameters updated */
 		orb_check(_param_update_sub, &updated);
 
@@ -278,6 +284,7 @@ Navigator::run()
 			params_update();
 		}
 
+		// vehicle 상태 업데이트
 		/* vehicle status updated */
 		orb_check(_vstatus_sub, &updated);
 
@@ -285,6 +292,7 @@ Navigator::run()
 			vehicle_status_update();
 		}
 
+		// 착륙여부 업데이트
 		/* vehicle land detected updated */
 		orb_check(_land_detected_sub, &updated);
 
@@ -292,6 +300,7 @@ Navigator::run()
 			vehicle_land_detected_update();
 		}
 
+		// fw 이므로 skip
 		/* navigation capabilities updated */
 		orb_check(_fw_pos_ctrl_status_sub, &updated);
 
@@ -299,6 +308,7 @@ Navigator::run()
 			fw_pos_ctrl_status_update();
 		}
 
+		// home 위치 업데이트
 		/* home position updated */
 		orb_check(_home_pos_sub, &updated);
 
@@ -306,6 +316,7 @@ Navigator::run()
 			home_position_update();
 		}
 
+		// vehicle 명령 업데이트 (commander가 보내줌)
 		/* vehicle_command updated */
 		orb_check(_vehicle_command_sub, &updated);
 
@@ -313,6 +324,7 @@ Navigator::run()
 			vehicle_command_s cmd;
 			orb_copy(ORB_ID(vehicle_command), _vehicle_command_sub, &cmd);
 
+			// GO_AROUND는 자동 착륙 기능을 취소하는 명령
 			if (cmd.command == vehicle_command_s::VEHICLE_CMD_DO_GO_AROUND) {
 
 				// DO_GO_AROUND is currently handled by the position controller (unacknowledged)
@@ -320,7 +332,7 @@ Navigator::run()
 				publish_vehicle_command_ack(cmd, vehicle_command_s::VEHICLE_CMD_RESULT_ACCEPTED);
 
 			} else if (cmd.command == vehicle_command_s::VEHICLE_CMD_DO_REPOSITION) {
-
+				// DO_REPOSITION은 파라미터로 전달한 lat, lon 위치로 이동하라는 명령
 				position_setpoint_triplet_s *rep = get_reposition_triplet();
 				position_setpoint_triplet_s *curr = get_position_setpoint_triplet();
 
@@ -343,7 +355,7 @@ Navigator::run()
 				} else {
 					rep->current.yaw = NAN;
 				}
-
+				// cmd의 5, 6, 7번째 파라미터가 lat, lon, 고도 
 				if (PX4_ISFINITE(cmd.param5) && PX4_ISFINITE(cmd.param6)) {
 
 					// Position change with optional altitude change
@@ -357,16 +369,16 @@ Navigator::run()
 						rep->current.alt = get_global_position()->alt;
 					}
 
-				} else if (PX4_ISFINITE(cmd.param7) && curr->current.valid
+				} else if (PX4_ISFINITE(cmd.param7) && curr->current.valid //lat, lon 정보가 범위를 벗어나는 경우 
 					   && PX4_ISFINITE(curr->current.lat)
 					   && PX4_ISFINITE(curr->current.lon)) {
-
+					// 현재 위치의 lat, lon을 사용하고 고도 값만 파라미터 값을 사용
 					// Altitude without position change
 					rep->current.lat = curr->current.lat;
 					rep->current.lon = curr->current.lon;
 					rep->current.alt = cmd.param7;
 
-				} else {
+				} else { //lat, lon, 고도 값이 모두 유효하지 않은 경우 그냥 gpos의 lat, lon, 고도 값 사용
 					// All three set to NaN - hold in current position
 					rep->current.lat = get_global_position()->lat;
 					rep->current.lon = get_global_position()->lon;
@@ -392,20 +404,21 @@ Navigator::run()
 				rep->current.loiter_direction = 1;
 				rep->current.type = position_setpoint_s::SETPOINT_TYPE_TAKEOFF;
 
-				if (home_position_valid()) {
+				if (home_position_valid()) { // home 위치가 유효한 경우 yaw만 설정
 					rep->current.yaw = cmd.param4;
 					rep->previous.valid = true;
 
-				} else {
+				} else { // home 위치가 유효하지 않은 경우 pos의 yaw로 설정
 					rep->current.yaw = get_local_position()->yaw;
 					rep->previous.valid = false;
 				}
 
+				// cmd의 5, 6 인자값이 설정된 경우라면 이 값으로 lat, lon 설정
 				if (PX4_ISFINITE(cmd.param5) && PX4_ISFINITE(cmd.param6)) {
 					rep->current.lat = (cmd.param5 < 1000) ? cmd.param5 : cmd.param5 / (double)1e7;
 					rep->current.lon = (cmd.param6 < 1000) ? cmd.param6 : cmd.param6 / (double)1e7;
 
-				} else {
+				} else { // 5, 6 인자가 유효한 값이 아니면 lat, lon 을 NAN 
 					// If one of them is non-finite, reset both
 					rep->current.lat = NAN;
 					rep->current.lon = NAN;
@@ -419,15 +432,16 @@ Navigator::run()
 				// CMD_NAV_TAKEOFF is acknowledged by commander
 
 			} else if (cmd.command == vehicle_command_s::VEHICLE_CMD_DO_LAND_START) {
-
+				// mission 중에 NAV_CMD_DO_LAND_START이 있는지 찾고, MAV_CMD_MISSION_START을 이용해서 mission을 시작.
+				
 				/* find NAV_CMD_DO_LAND_START in the mission and
 				 * use MAV_CMD_MISSION_START to start the mission there
 				 */
-				if (_mission.land_start()) {
+				if (_mission.land_start()) { //mission 중에 land 명령이 있는 경우 
 					vehicle_command_s vcmd = {};
-					vcmd.command = vehicle_command_s::VEHICLE_CMD_MISSION_START;
+					vcmd.command = vehicle_command_s::VEHICLE_CMD_MISSION_START; //mission을 수행하기 위해서 MAV_CMD_MISSION_START 사용
 					vcmd.param1 = _mission.get_land_start_index();
-					publish_vehicle_cmd(&vcmd);
+					publish_vehicle_cmd(&vcmd);  //commander에게 mission_start를 하도록 시킴
 
 				} else {
 					PX4_WARN("planned mission landing not available");
@@ -436,6 +450,7 @@ Navigator::run()
 				publish_vehicle_command_ack(cmd, vehicle_command_s::VEHICLE_CMD_RESULT_ACCEPTED);
 
 			} else if (cmd.command == vehicle_command_s::VEHICLE_CMD_MISSION_START) {
+				// 시작한 mission index로 해당 mission 수행. 
 				if (_mission_result.valid && PX4_ISFINITE(cmd.param1) && (cmd.param1 >= 0)) {
 					if (!_mission.set_current_offboard_mission_index(cmd.param1)) {
 						PX4_WARN("CMD_MISSION_START failed");
@@ -445,6 +460,7 @@ Navigator::run()
 				// CMD_MISSION_START is acknowledged by commander
 
 			} else if (cmd.command == vehicle_command_s::VEHICLE_CMD_DO_CHANGE_SPEED) {
+				// param2가 변경할 속도. 이 값이 0보다 큰 값인 경우 이 값으로 속도 설정
 				if (cmd.param2 > FLT_EPSILON) {
 					// XXX not differentiating ground and airspeed yet
 					set_cruising_speed(cmd.param2);
@@ -452,6 +468,7 @@ Navigator::run()
 				} else {
 					set_cruising_speed();
 
+					// param3는 throttle % 값. set_cruising_throttle()에 인자로 넘길때 100으로 나눈값 사용
 					/* if no speed target was given try to set throttle */
 					if (cmd.param3 > FLT_EPSILON) {
 						set_cruising_throttle(cmd.param3 / 100);
@@ -499,7 +516,7 @@ Navigator::run()
 					_vroi.mode = vehicle_command_s::VEHICLE_ROI_NONE;
 					break;
 				}
-
+				// roi 명령에 따라서 param 값을 읽어오고 roi 정보를 publish
 				_vroi.timestamp = hrt_absolute_time();
 
 				if (_vehicle_roi_pub != nullptr) {
@@ -513,14 +530,17 @@ Navigator::run()
 			}
 		}
 
+		// traffic ADSB 처리. ADSB 정보를 가지고 접근하는 비행체와 거리를 확인하고 경고 발생 혹은 RTL 동작 수행
 		/* Check for traffic */
 		check_traffic();
 
+		// geofence 위반 여부 검사. 특정 시간 주기로 검사하도록
 		/* Check geofence violation */
 		if (have_geofence_position_data &&
 		    (_geofence.getGeofenceAction() != geofence_result_s::GF_ACTION_NONE) &&
 		    (hrt_elapsed_time(&last_geofence_check) > GEOFENCE_CHECK_INTERVAL)) {
 
+			// gpos, gps_pos, home 위치를 인자로 주고 geofence 내부인지 여부 확인
 			bool inside = _geofence.check(_global_pos, _gps_pos, _home_pos,
 						      home_position_valid());
 			last_geofence_check = hrt_absolute_time();
@@ -530,17 +550,20 @@ Navigator::run()
 			_geofence_result.geofence_action = _geofence.getGeofenceAction();
 			_geofence_result.home_required = _geofence.isHomeRequired();
 
+			// geofence를 벗어나는 경우 
 			if (!inside) {
+				// geofence 위반 flag를 true로 설정
 				/* inform other apps via the mission result */
 				_geofence_result.geofence_violated = true;
 
+				// mavlink로 geofence 위반을 통지하도록
 				/* Issue a warning about the geofence violation once */
 				if (!_geofence_violation_warning_sent) {
 					mavlink_log_critical(&_mavlink_log_pub, "Geofence violation");
 					_geofence_violation_warning_sent = true;
 				}
 
-			} else {
+			} else { //geofence 내부에 있으므로 관련 flag를 false로 설정
 				/* inform other apps via the mission result */
 				_geofence_result.geofence_violated = false;
 
@@ -551,11 +574,12 @@ Navigator::run()
 			publish_geofence_result();
 		}
 
+		// navigation state에 따라 처리할 mission block을 설정. 
 		/* Do stuff according to navigation state set by commander */
 		NavigatorMode *navigation_mode_new{nullptr};
 
 		switch (_vstatus.nav_state) {
-		case vehicle_status_s::NAVIGATION_STATE_AUTO_MISSION:
+		case vehicle_status_s::NAVIGATION_STATE_AUTO_MISSION: // mission 모드로 동작
 			_pos_sp_triplet_published_invalid_once = false;
 
 			_mission.set_execution_mode(mission_result_s::MISSION_EXECUTION_MODE_NORMAL);
@@ -563,39 +587,42 @@ Navigator::run()
 
 			break;
 
-		case vehicle_status_s::NAVIGATION_STATE_AUTO_LOITER:
+		case vehicle_status_s::NAVIGATION_STATE_AUTO_LOITER: //auto loiter로 동작
 			_pos_sp_triplet_published_invalid_once = false;
 			navigation_mode_new = &_loiter;
 			break;
 
-		case vehicle_status_s::NAVIGATION_STATE_AUTO_RCRECOVER:
+		case vehicle_status_s::NAVIGATION_STATE_AUTO_RCRECOVER: //rcloss 복구를 위한 auto recover로 동작
 			_pos_sp_triplet_published_invalid_once = false;
 			navigation_mode_new = &_rcLoss;
 			break;
 
-		case vehicle_status_s::NAVIGATION_STATE_AUTO_RTL: {
+		case vehicle_status_s::NAVIGATION_STATE_AUTO_RTL: {  // auto rtl로 동작
 				_pos_sp_triplet_published_invalid_once = false;
 
 				const bool rtl_activated = _previous_nav_state != vehicle_status_s::NAVIGATION_STATE_AUTO_RTL;
 
+				//RTL은 mission과 rtl로 동작이 가능하다. 조건에 따라서 mission 혹은 rtl을 선택해야함. 
 				switch (rtl_type()) {
 				case RTL::RTL_LAND:
 					if (rtl_activated) {
 						mavlink_and_console_log_info(get_mavlink_log_pub(), "RTL LAND activated");
 					}
 
+					// RTL이 mission 착륙을 이용하도록 설정되어 있는 경우라면 mission이 처리
 					// if RTL is set to use a mission landing and mission has a planned landing, then use MISSION to fly there directly
 					if (on_mission_landing() && !get_land_detected()->landed) {
 						_mission.set_execution_mode(mission_result_s::MISSION_EXECUTION_MODE_FAST_FORWARD);
 						navigation_mode_new = &_mission;
 
-					} else {
+					} else { // mission을 이용하지 않는 경우 rtl 이용
 						navigation_mode_new = &_rtl;
 					}
 
 					break;
 
 				case RTL::RTL_MISSION:
+					// land start 명령이 가능한 경우라면 mission에서 처리하도록
 					if (_mission.get_land_start_available() && !get_land_detected()->landed) {
 						// the mission contains a landing spot
 						_mission.set_execution_mode(mission_result_s::MISSION_EXECUTION_MODE_FAST_FORWARD);
@@ -619,7 +646,7 @@ Navigator::run()
 
 						navigation_mode_new = &_mission;
 
-					} else {
+					} else { // mission 모드의 reverse 모드로 실행하는 경우에는 mission에서 처리하도록 한다.
 						// fly the mission in reverse if switching from a non-manual mode
 						_mission.set_execution_mode(mission_result_s::MISSION_EXECUTION_MODE_REVERSE);
 
@@ -641,7 +668,7 @@ Navigator::run()
 
 							navigation_mode_new = &_mission;
 
-						} else {
+						} else { // 그외 일반 상황에서는 rtl이 처리한다.
 							if (rtl_activated) {
 								mavlink_and_console_log_info(get_mavlink_log_pub(), "RTL Mission activated, fly to home");
 							}
@@ -652,7 +679,7 @@ Navigator::run()
 
 					break;
 
-				default:
+				default: // RTL_LAND, RTL_MISSION 이외에는 무조건 rtl이 처리
 					if (rtl_activated) {
 						mavlink_and_console_log_info(get_mavlink_log_pub(), "RTL HOME activated");
 					}
@@ -664,28 +691,28 @@ Navigator::run()
 				break;
 			}
 
-		case vehicle_status_s::NAVIGATION_STATE_AUTO_TAKEOFF:
+		case vehicle_status_s::NAVIGATION_STATE_AUTO_TAKEOFF: //takeoff 상태 처리
 			_pos_sp_triplet_published_invalid_once = false;
 			navigation_mode_new = &_takeoff;
 			break;
 
-		case vehicle_status_s::NAVIGATION_STATE_AUTO_LAND:
+		case vehicle_status_s::NAVIGATION_STATE_AUTO_LAND: // auto_land 상태는 land가 처리 
 			_pos_sp_triplet_published_invalid_once = false;
 			navigation_mode_new = &_land;
 			break;
 
-		case vehicle_status_s::NAVIGATION_STATE_AUTO_PRECLAND:
+		case vehicle_status_s::NAVIGATION_STATE_AUTO_PRECLAND: // auto_precland는 precland가 처리
 			_pos_sp_triplet_published_invalid_once = false;
 			navigation_mode_new = &_precland;
 			_precland.set_mode(PrecLandMode::Required);
 			break;
 
-		case vehicle_status_s::NAVIGATION_STATE_DESCEND:
+		case vehicle_status_s::NAVIGATION_STATE_DESCEND: // descend 상태는 land가 처리
 			_pos_sp_triplet_published_invalid_once = false;
 			navigation_mode_new = &_land;
 			break;
 
-		case vehicle_status_s::NAVIGATION_STATE_AUTO_RTGS:
+		case vehicle_status_s::NAVIGATION_STATE_AUTO_RTGS: // auto_rtg는 datalinkloss가 처리
 			_pos_sp_triplet_published_invalid_once = false;
 			navigation_mode_new = &_dataLinkLoss;
 			break;
@@ -695,17 +722,17 @@ Navigator::run()
 			navigation_mode_new = &_engineFailure;
 			break;
 
-		case vehicle_status_s::NAVIGATION_STATE_AUTO_LANDGPSFAIL:
+		case vehicle_status_s::NAVIGATION_STATE_AUTO_LANDGPSFAIL: // auto_gpsfail은 gpsfail이 처리
 			_pos_sp_triplet_published_invalid_once = false;
 			navigation_mode_new = &_gpsFailure;
 			break;
 
-		case vehicle_status_s::NAVIGATION_STATE_AUTO_FOLLOW_TARGET:
+		case vehicle_status_s::NAVIGATION_STATE_AUTO_FOLLOW_TARGET: // auto_follow_target은 follow_target이 처리
 			_pos_sp_triplet_published_invalid_once = false;
 			navigation_mode_new = &_follow_target;
 			break;
 
-		case vehicle_status_s::NAVIGATION_STATE_MANUAL:
+		case vehicle_status_s::NAVIGATION_STATE_MANUAL:  // rc 조정 모드 or offboard 인 경우에는 별도 처리하지 않음.
 		case vehicle_status_s::NAVIGATION_STATE_ACRO:
 		case vehicle_status_s::NAVIGATION_STATE_ALTCTL:
 		case vehicle_status_s::NAVIGATION_STATE_POSCTL:
@@ -722,8 +749,11 @@ Navigator::run()
 		// update the vehicle status
 		_previous_nav_state = _vstatus.nav_state;
 
+		// 처리하는 mode가 바뀐 경우, takeoff -> loiter를 제외하고 triplet을 리셋.
 		/* we have a new navigation mode: reset triplet */
 		if (_navigation_mode != navigation_mode_new) {
+			// 자동 takeoff했다가 loiter하는 경우 리셋을 안하도록.
+			// takeoff 고도는 지켜야하는데 takeoff 고도 보다 낮은 고도에서 loiter하게 되는 것을 막기 위해서
 			// We don't reset the triplet if we just did an auto-takeoff and are now
 			// going to loiter. Otherwise, we lose the takeoff altitude and end up lower
 			// than where we wanted to go.
@@ -738,11 +768,13 @@ Navigator::run()
 
 		_navigation_mode = navigation_mode_new;
 
+		//위에서 설정한 new_mode.run()이 실행되는 지점
 		/* iterate through navigation modes and set active/inactive for each */
 		for (unsigned int i = 0; i < NAVIGATOR_MODE_ARRAY_SIZE; i++) {
 			_navigation_mode_array[i]->run(_navigation_mode == _navigation_mode_array[i]);
 		}
 
+		// 이미 착륙한 상태인 경우 type을 IDLE로 지정. 대신 착륙한 상태에서 takeoff 할 수 있으므로 예외처리 해줌.
 		/* if we landed and have not received takeoff setpoint then stay in idle */
 		if (_land_detected.landed &&
 		    !((_vstatus.nav_state == vehicle_status_s::NAVIGATION_STATE_AUTO_TAKEOFF)
@@ -755,18 +787,21 @@ Navigator::run()
 
 		}
 
+		// 지정한 mode가 없는 경우(rc조정 or offboard인 경우)에는 invalid_once를 true로 설정
 		/* if nothing is running, set position setpoint triplet invalid once */
 		if (_navigation_mode == nullptr && !_pos_sp_triplet_published_invalid_once) {
 			_pos_sp_triplet_published_invalid_once = true;
 			reset_triplets();
 		}
 
+		// 각 mode에서 pos sp를 업데이트했다는 flag를 설정한 경우 publish하도록 함
 		if (_pos_sp_triplet_updated) {
 			_pos_sp_triplet.timestamp = hrt_absolute_time();
 			publish_position_setpoint_triplet();
 			_pos_sp_triplet_updated = false;
 		}
 
+		// mission 결과가 update된 경우 mission 결과도 publish 함.
 		if (_mission_result_updated) {
 			publish_mission_result();
 			_mission_result_updated = false;
@@ -988,7 +1023,7 @@ void Navigator::fake_traffic(const char *callsign, float distance, float directi
 	orb_advert_t h = orb_advertise_queue(ORB_ID(transponder_report), &tr, transponder_report_s::ORB_QUEUE_LENGTH);
 	(void)orb_unadvertise(h);
 }
-
+// ADSB 정보 수신하여 traffic 처리. transponder_report를 subscribe. 현재 위치를 기준으로 tr 수신한 곳의 좌표와 비교하여 속도등을 얻는다.
 void Navigator::check_traffic()
 {
 	double lat = get_global_position()->lat;
@@ -1021,17 +1056,23 @@ void Navigator::check_traffic()
 			continue;
 		}
 
-		float d_hor, d_vert;
+		float d_hor, d_vert; //수평 거리, 수직 거리
 		get_distance_to_point_global_wgs84(lat, lon, alt,
 						   tr.lat, tr.lon, tr.altitude, &d_hor, &d_vert);
 
 
+		// 해당 time에 예상되는 고도
 		// predict final altitude (positive is up) in prediction time frame
 		float end_alt = tr.altitude + (d_vert / tr.hor_velocity) * tr.ver_velocity;
 
+		// 떨어진 거리 + 1km를 예상 거리로 설정
 		// Predict until the vehicle would have passed this system at its current speed
 		float prediction_distance = d_hor + 1000.0f;
 
+		// 동일한 lat, lon를 지나더라도 고도가 충분히 차이가 난다면 고려할 필요가 없다.
+		// 대부분 일반 비행기의 경우 시간에 따라 고도를 계속 체크한다. 
+		// px4에서는 end_alt - hor_sep 가 px4의 고도보다 작은 경우가 가장 낮은 고도라고 가정한다. (=> MC 경우에 맞는 솔루션)
+		// 일반적인 비행에서 이런 가정을 기준으로 하는 경우 적합하지는 않다. 이 경우 TCAS에 맞는 솔루션을 사용해야한다.
 		// If the altitude is not getting close to us, do not calculate
 		// the horizontal separation.
 		// Since commercial flights do most of the time keep flight levels
@@ -1042,15 +1083,19 @@ void Navigator::check_traffic()
 		// ever be used in normal airspace this implementation would anyway be
 		// inappropriate as it should be replaced with a TCAS compliant solution.
 
+		// 수직 거리, 수평 거리가 임계 거리 이내에 있는 경우
 		if ((fabsf(alt - tr.altitude) < vertical_separation) || ((end_alt - horizontal_separation) < alt)) {
 
+			// 현재 비행기의 lat, lon, heading 기준으로 예상 거리만큼 이동한다고 했을 때 예상되는 lat, lon를 구한다. 
 			double end_lat, end_lon;
 			waypoint_from_heading_and_distance(tr.lat, tr.lon, tr.heading, prediction_distance, &end_lat, &end_lon);
 
 			struct crosstrack_error_s cr;
 
+			//이동 경로에서 현재 비행기 위치를 가지고 crosstrack을 구한다. 
 			if (!get_distance_to_line(&cr, lat, lon, tr.lat, tr.lon, end_lat, end_lon)) {
 
+				// crosstrack의 거리가 임계 거리 이내이 경우에 파라미터에 설정에 따라서 경고, 착륙, home으로 이동 등의 동작을 하게 한다. 
 				if (!cr.past_end && (fabsf(cr.distance) < horizontal_separation)) {
 
 					// direction of traffic in human-readable 0..360 degree in earth frame
@@ -1073,7 +1118,7 @@ void Navigator::check_traffic()
 							break;
 						}
 
-					case 2: {
+					case 2: { // 일단 최소 고도로 이동시키고 RTL 명령을 발생시킨다. 
 							mavlink_log_critical(&_mavlink_log_pub, "AVOIDING TRAFFIC %s heading %d, returning home",
 									     tr.flags & transponder_report_s::PX4_ADSB_FLAGS_VALID_CALLSIGN ? tr.callsign : "unknown",
 									     traffic_direction);
@@ -1096,6 +1141,7 @@ void Navigator::check_traffic()
 	}
 }
 
+// vtol이나 fw인 경우 skip
 bool
 Navigator::abort_landing()
 {

@@ -294,6 +294,7 @@ Mission::set_current_offboard_mission_index(uint16_t index)
 		// as it is set by the user
 		_mission_waypoints_changed = false;
 
+		// 현재 mission 모드로 동작 중이라면 인자로 받은 index의 mission이 구동될 수 있도록 set_mission_items()를 호출하면 됨.
 		// update mission items if already in active mission
 		if (_navigator->is_planned_mission()) {
 			// prevent following "previous - current" line
