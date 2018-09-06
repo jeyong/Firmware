@@ -79,10 +79,10 @@ void FollowTarget::on_inactive()
 
 void FollowTarget::on_activation()
 {
-	// 추적시 거리 설정
+	// 추적시 거리 설정. 최소 값은 1m. 
 	_follow_offset = _param_tracking_dist.get() < 1.0F ? 1.0F : _param_tracking_dist.get();
 
-	// 반응성 0.1 ~ 1.0까지 값
+	// 반응성 0.1 ~ 1.0까지 값으로 제한
 	_responsiveness = math::constrain((float) _param_tracking_resp.get(), .1F, 1.0F);
 
 	// 추적시 위치 (앞, 뒤 혹은 왼쪽, 오른쪽 등 설정)
@@ -113,6 +113,7 @@ void FollowTarget::on_active()
 	orb_check(_follow_target_sub, &updated);
 
 	// 추적하는 타겟 정보가 업데이트 된 경우에 현재 타겟 motion 정보를 업데이트
+	// 목적 : _current_target_motion을 최신 값으로 업데이트
 	if (updated) {
 		follow_target_s target_motion;
 
@@ -150,13 +151,13 @@ void FollowTarget::on_active()
 
 	}
 
-	// 타겟 속도 업데이트
+	// 타겟 속도가 업데이트 된 경우에 -> target_motion 값에서 offset을 적용한 target_motion_with_offset 값을 계산하는게 목적. 
 	// update target velocity
 	if (target_velocity_valid() && updated) {
 
 		dt_ms = ((_current_target_motion.timestamp - _previous_target_motion.timestamp) / 1000);
 
-		// 최소 10ms 마다 속도 업데이트. ignore a small dt
+		// 최소 10ms 마다 타겟의 이동 거리를 구해서 결국 타겟의 이동 속도 구하기.  ignore a small dt
 		if (dt_ms > 10.0F) {
 			// 가장 마지막에 알고 있는 타겟의 lat, lon 정보를 ref로 설정
 			// get last gps known reference for target
@@ -169,15 +170,16 @@ void FollowTarget::on_active()
 
 			// pos 기반으로 타겟의 평균 속도 계산
 			// update the average velocity of the target based on the position
-			_est_target_vel = _target_position_delta / (dt_ms / 1000.0f);
+			_est_target_vel = _target_position_delta / (dt_ms / 1000.0f); // m/us
 
 			// 타겟이 이동한 경우 offset과 rotation을 추가 
+			// 타겟의 속도가 얼마 이상이면 offset과 rotation을 추가 
 			// if the target is moving add an offset and rotation
 			if (_est_target_vel.length() > .5F) {
 				_target_position_offset = _rot_matrix * _est_target_vel.normalized() * _follow_offset;
 			}
 
-			// 타겟과의 거리가 허용하는 범위 내에 있는 경우,
+			// 타겟과의 거리가 1.5배를 벗어나면 허용 반경을 벗어났다고 설정. 반경 내부에 있으면 반경 내부에 있다고 설정.
 			// 속도 제어기가 해당 반경 내에 들어갈 수 있는 기회를 주기 위해서 버퍼(exited는 1.5배)를 좀더 준다.
 			// are we within the target acceptance radius?
 			// give a buffer to exit/enter the radius to give the velocity controller
@@ -219,7 +221,7 @@ void FollowTarget::on_active()
 
 				_yaw_rate = wrap_pi((_yaw_angle - _navigator->get_global_position()->yaw) / (dt_ms / 1000.0f));
 
-			} else {
+			} else { // 1m 이하면 yaw는 설정 안함.
 				_yaw_angle = _yaw_rate = NAN;
 			}
 		}
@@ -237,17 +239,17 @@ void FollowTarget::on_active()
 //				(double) _yaw_rate);
 	}
 
-	// 타겟 위치가 유효한 경우 lat, lon 계산
+	// 현재 target_motion 기준으로 offset이 반영한 lat, lon 계산. 타겟 위치가 유효한 경우 lat, lon 계산
 	if (target_position_valid()) {
 
-		// offset을 가지고 타겟 위치를 계산
+		// offset을 반영한 lat, lon 계산
 		// get the target position using the calculated offset
 		map_projection_init(&target_ref,  _current_target_motion.lat, _current_target_motion.lon);
 		map_projection_reproject(&target_ref, _target_position_offset(0), _target_position_offset(1),
 					 &target_motion_with_offset.lat, &target_motion_with_offset.lon);
 	}
 
-	// yaw차이가 3도 이내 인 경우 yaw_rate를 NAN으로 설정
+	// yaw차이가 3도 이내 인 경우 yaw_rate를 NAN으로 설정하여 yaw_rate가 부드럽게 되도록 함.
 	// clamp yaw rate smoothing if we are with in
 	// 3 degrees of facing target
 	if (PX4_ISFINITE(_yaw_rate)) {
@@ -391,7 +393,7 @@ bool FollowTarget::target_position_valid()
 	return (_target_updates >= 1);
 }
 
-// follow target을 위한 mission item을 설정.
+// follow target을 위한 mission item을 설정. 
 void
 FollowTarget::set_follow_target_item(struct mission_item_s *item, float min_clearance, follow_target_s &target,
 				     float yaw)
@@ -410,6 +412,7 @@ FollowTarget::set_follow_target_item(struct mission_item_s *item, float min_clea
 		item->lon = target.lon;
 		item->altitude = _navigator->get_home_position()->alt;
 
+		// 최소 8m 이상 고도 마진 추가 
 		if (min_clearance > 8.0f) {
 			item->altitude += min_clearance;
 

@@ -97,7 +97,7 @@ void Geofence::_updateFence()
 
 	if (ret == sizeof(mission_stats_entry_s)) {
 		num_fence_items = stats.num_items;  //item의 수 (이 값만큼 loop돌면서 fence point 정보를 가지고와서 polygon 만들기 )
-		_update_counter = stats.update_counter; //update 횟수
+		_update_counter = stats.update_counter; //update 횟수. 변경이 일어났는지 여부를 확인하는 용도로 사용. 
 	}
 
 	// iterate over all polygons and store their starting vertices
@@ -129,7 +129,7 @@ void Geofence::_updateFence()
 		case NAV_CMD_FENCE_POLYGON_VERTEX_EXCLUSION:
 		case NAV_CMD_FENCE_POLYGON_VERTEX_INCLUSION:
 			if (!is_circle_area && mission_fence_point.vertex_count == 0) {
-				++current_seq; // avoid endless loop
+				++current_seq; // avoid endless loop // current_seq를 업데이트 안하면 무한루프
 				PX4_ERR("Polygon with 0 vertices. Skipping");
 
 			} else {
@@ -232,7 +232,7 @@ bool Geofence::checkAll(double lat, double lon, float altitude)
 {
 	bool inside_fence = true;
 
-	// home pos가 제공되는 경우
+	// home pos가 제공되는 경우, home과의 거리가 허용 범위인지 먼저 체크하고 다각형 체크 수행
 	if (isHomeRequired() && _navigator->home_position_valid()) {
 
 		// home으로부터의 허용하는 최대 수평, 수직 거리
@@ -282,7 +282,7 @@ bool Geofence::checkAll(double lat, double lon, float altitude)
 		return inside_fence;
 
 	} else {
-		_outside_counter++;
+		_outside_counter++; // 몇번 벗어나는지 횟수 기록
 
 		// 여러 polygon 에서 몇 번 fence를 벗어난 횟수가 허용 범위 내에 있는지 체크
 		if (_outside_counter > _param_counter_threshold.get()) {
@@ -318,7 +318,7 @@ bool Geofence::checkPolygons(double lat, double lon, float altitude)
 		return true;
 	}
 
-	// 수직 거리 검사 : 인자로 받은 고도가 범위를 벗어나면 false 반환
+	// 수직 거리 검사 : 인자로 받은 고도가 허용 범위를 벗어나면 false 반환
 	/* Vertical check */
 	if (_altitude_max > _altitude_min) { // only enable vertical check if configured properly
 		if (altitude > _altitude_max || altitude < _altitude_min) {
@@ -351,7 +351,7 @@ bool Geofence::checkPolygons(double lat, double lon, float altitude)
 				outside_exclusion = false;
 			}
 
-		} else { // it's a polygon
+		} else { // 다각형인 경우 체크 // it's a polygon
 			bool inside = insidePolygon(_polygons[polygon_idx], lat, lon, altitude);
 
 			if (_polygons[polygon_idx].fence_type == NAV_CMD_FENCE_POLYGON_VERTEX_INCLUSION) {
@@ -378,7 +378,7 @@ bool Geofence::checkPolygons(double lat, double lon, float altitude)
 bool Geofence::insidePolygon(const PolygonInfo &polygon, double lat, double lon, float altitude)
 {
 	//PNPOLY 알고리즘 이용해서 각 vertex의 좌표를 가지고 인자로 받은 lat, lon, 고도가 fence내에 포함되는지 여부를 확인
-
+	// 여기 참고 : https://wrf.ecse.rpi.edu//Research/Short_Notes/pnpoly.html
 	/* Adaptation of algorithm originally presented as
 	 * PNPOLY - Point Inclusion in Polygon Test
 	 * W. Randolph Franklin (WRF)
@@ -448,7 +448,7 @@ bool Geofence::insideCircle(const PolygonInfo &polygon, double lat, double lon, 
 	}
 
 	float x1, y1, x2, y2;
-	map_projection_project(&_projection_reference, lat, lon, &x1, &y1); //lat, lon 기준이므로 거
+	map_projection_project(&_projection_reference, lat, lon, &x1, &y1); //x1, y1는 같은 ref의 lat, lon와 같으므로 0이 됨.
 	map_projection_project(&_projection_reference, circle_point.lat, circle_point.lon, &x2, &y2); // 원의 특정 지점의 lat, lon 까지의 x, y 좌표
 	float dx = x1 - x2, dy = y1 - y2; //현재 lat, lon 기준으로 원테두리 까지의 x, y 차이 구하기  
 	//원점 기준으로의 거리가 반경 이내 인지 체크 (루트연산을 하지 않기 위해서 그냥 반경을 곱했음. )
@@ -461,14 +461,14 @@ Geofence::valid()
 	return true; // always valid
 }
 
-// sd카드 /etc/geofence.txt 에 파일 넣어두면 이 파일을 읽어서 dm에 넣어줌
+// sd카드 /etc/geofence.txt 에 파일 넣어두면 이 파일을 읽어서 fence 정보를 읽어서 dm에 넣어줌
 int
 Geofence::loadFromFile(const char *filename)
 {
 	FILE		*fp;
 	char		line[120];
 	int			pointCounter = 0;
-	bool		gotVertical = false;
+	bool		gotVertical = false; //파일의 맨 처음에 고도 min, max 읽기를 수행했는지 여부 확인을 위한 변수. 
 	const char commentChar = '#';
 	int rc = PX4_ERROR;
 
@@ -548,7 +548,7 @@ Geofence::loadFromFile(const char *filename)
 
 			pointCounter++; //파일에서 읽은 지점의 갯수 카운트
 
-		} else { //goVertical은 무조건 여기 들어온다. 즉 파일의 시작에 바로 min/max를 먼저 읽어서 설정.
+		} else { //gotVertical은 처음에 무조건 여기 들어온다. 즉 파일의 시작에 바로 min/max를 먼저 읽어서 설정.
 			/* Parse the line as the vertical limits */
 			if (sscanf(line, "%f %f", &_altitude_min, &_altitude_max) != 2) {
 				goto error;
@@ -603,7 +603,7 @@ int Geofence::clearDm()
 	return PX4_OK;
 }
 
-// home기주느 최대 수평, 수직 거리가 설정되어 있으므로 home위치를 알아야 가능. 그래서 home이 필요함
+// home기준으로 최대 수평, 수직 거리값이 지정되어 있는 경우 flag를 true로 설정. 이 flag가 설정되어 있다는 말은 home위치를 알아야 가능하므로 그래서 home이 필요하다고 이름 붙였음.
 bool Geofence::isHomeRequired()
 {
 	bool max_horizontal_enabled = (_param_max_hor_distance.get() > FLT_EPSILON);
