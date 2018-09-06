@@ -859,6 +859,7 @@ Navigator::print_status()
 	return 0;
 }
 
+// pos sp를 publish 하기
 void
 Navigator::publish_position_setpoint_triplet()
 {
@@ -899,9 +900,11 @@ Navigator::get_altitude_acceptance_radius()
 	}
 }
 
+// 비행 속도 정보 얻기
 float
 Navigator::get_cruising_speed()
 {
+	// mission 중이면 mission에서 정의한 속도를 변환하고 그렇지 않은 경우 -1 반환(호버링 상태)
 	/* there are three options: The mission-requested cruise speed, or the current hover / plane speed */
 	if (_vstatus.is_rotary_wing) {
 		if (is_planned_mission() && _mission_cruising_speed_mc > 0.0f) {
@@ -921,6 +924,7 @@ Navigator::get_cruising_speed()
 	}
 }
 
+// mission의 비행 속도 설정
 void
 Navigator::set_cruising_speed(float speed)
 {
@@ -932,6 +936,7 @@ Navigator::set_cruising_speed(float speed)
 	}
 }
 
+// 비행 속도 초기화. -1이 초기값
 void
 Navigator::reset_cruising_speed()
 {
@@ -948,6 +953,7 @@ Navigator::reset_triplets()
 	_pos_sp_triplet_updated = true;
 }
 
+// throttle 값 얻기. 0 이상일때 반환 이외는 -1
 float
 Navigator::get_cruising_throttle()
 {
@@ -960,6 +966,7 @@ Navigator::get_cruising_throttle()
 	}
 }
 
+// 허용 반경 얻기
 float
 Navigator::get_acceptance_radius(float mission_item_radius)
 {
@@ -978,6 +985,7 @@ Navigator::get_acceptance_radius(float mission_item_radius)
 	return radius;
 }
 
+// 파일에서 fence 정보 얻기
 void
 Navigator::load_fence_from_file(const char *filename)
 {
@@ -1226,6 +1234,7 @@ int navigator_main(int argc, char *argv[])
 	return Navigator::main(argc, argv);
 }
 
+// mission 결과를 반환
 void
 Navigator::publish_mission_result()
 {
