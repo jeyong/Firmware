@@ -272,10 +272,10 @@ PrecLand::run_state_horizontal_approach()
 	float x = _target_pose.x_abs;  //비행체와 타겟의 NED의 X/north 으로 떨어진 거리 (m단위)
 	float y = _target_pose.y_abs;  //비행체와 타겟의 NED의 Y/east 으로 떨어진 거리 (m단위)
 
-	// 최대한 부드럽게 이용할 수 있는 거리 x, y를 계산. slew rate를 설정
+	// 최대한 부드럽게 이용할 수 있는 거리 x, y를 계산. 센서에서는 x, y만큼 떨어져 있다고 하지만 slew rate(입력이 갑작스럽게 변화하는 경우 최대로 낼수 있는 값의 범위를 제한)을 고려하여 x, y 값을 허용 범위 값으로 재조정.
 	slewrate(x, y);
 
-	// x,y를 떨어진 곳의 위치 lat, lon 구하기. sp로 lat, lon을 사용하니까 이 값을 구해야함.
+	// x,y를 떨어진 거리를 통해 타겟의 lat, lon 구하기. 구한 lat, lon을 sp의 lat, lon에 사용.
 	// XXX need to transform to GPS coords because mc_pos_control only looks at that
 	double lat, lon;
 	map_projection_reproject(&_map_ref, x, y, &lat, &lon);
@@ -579,7 +579,8 @@ void PrecLand::slewrate(float &sp_x, float &sp_y)
 		// assume dt will be about 50000us
 		dt = 50000 / SEC2USEC;
 
-		// 천천히 전환되도록 하기 위해서 이전 sp 값을 아래와 같이 계산해서 대입. _sp_pev_prev
+		// sp_pev는 현재 비행체 위치와 sp의 lat, lon 사이의 거리
+		// 이전 시간에 sp_pev가 sp_pev_prev. 
 		// sp_pev 현재 x, y. sp_pev_prev는 과거 sp로 부드럽게 전환 되도록 하기 위해 계산함.
 		// set a best guess for previous setpoints for smooth transition
 		map_projection_project(&_map_ref, _navigator->get_position_setpoint_triplet()->current.lat,
@@ -610,13 +611,13 @@ void PrecLand::slewrate(float &sp_x, float &sp_y)
 		sp_curr = _sp_pev * 2 - _sp_pev_prev + sp_acc * (dt * dt);
 	}
 
-	// 최대 가속도가 주어진 경우 특정 sp에 멈출 수 있도록, sp 속도를 제한
+	// 최대 가속도가 주어진 경우 특정 sp에 멈출 수 있도록, sp 속도를 제한이 필요. 즉 max_spd 이하 속도여야 sp에 부드럽게 멈추는게 가능하므로.
 	// limit the setpoint speed such that we can stop at the setpoint given the maximum acceleration/deceleration
 	float max_spd = sqrtf(_param_acceleration_hor.get() * ((matrix::Vector2f)(_sp_pev - matrix::Vector2f(sp_x,
 			      sp_y))).length());
 	sp_vel = (sp_curr - _sp_pev) / dt; // velocity of the setpoints
 
-	if (sp_vel.length() > max_spd) { // 최대 속도보다 크면 줄이도록 sp_curr 다시 계산
+	if (sp_vel.length() > max_spd) { // 최대 속도보다 크면 max_spd보다 작게 하기 위해서 normalized()하여 sp_vel을 다시 계산하고 이를 이용해서 sp_curr 다시 계산
 		sp_vel = sp_vel.normalized() * max_spd;
 		sp_curr = _sp_pev + sp_vel * dt;
 	}

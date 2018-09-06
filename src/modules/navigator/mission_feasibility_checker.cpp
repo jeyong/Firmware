@@ -50,6 +50,7 @@
 #include <mathlib/mathlib.h>
 #include <systemlib/mavlink_log.h>
 
+// mission의 1번째 waypoint가 허용 범위 내에 있는지, waypoint간 거리가 허용 범위 내에 있는지, geofence, 고도 체크 수행
 bool
 MissionFeasibilityChecker::checkMissionFeasible(const mission_s &mission,
 		float max_distance_to_1st_waypoint, float max_distance_between_waypoints,

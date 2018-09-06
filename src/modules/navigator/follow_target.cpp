@@ -168,11 +168,12 @@ void FollowTarget::on_active()
 			map_projection_project(&target_ref, _current_target_motion.lat, _current_target_motion.lon,
 					       &(_target_position_delta(0)), &(_target_position_delta(1)));
 
-			// pos 기반으로 타겟의 평균 속도 계산
+			// pos 기반으로 타겟의 평균 속도 계산. 속도 = 이동거리 / 시간
 			// update the average velocity of the target based on the position
-			_est_target_vel = _target_position_delta / (dt_ms / 1000.0f); // m/us
+			_est_target_vel = _target_position_delta / (dt_ms / 1000.0f); // m/s
 
-			// 타겟이 이동한 경우 offset과 rotation을 추가 
+			// estimation한 속도가 0.5 이상인 경우 영향을 많이 미치므로 이 경우 offset을 반영해야함.
+			// 
 			// 타겟의 속도가 얼마 이상이면 offset과 rotation을 추가 
 			// if the target is moving add an offset and rotation
 			if (_est_target_vel.length() > .5F) {

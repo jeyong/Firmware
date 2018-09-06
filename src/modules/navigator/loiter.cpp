@@ -81,6 +81,7 @@ Loiter::on_active()
 	}
 }
 
+// mission item에 현재 위치로 loiter하게 설정
 void
 Loiter::set_loiter_position()
 {
@@ -104,6 +105,7 @@ Loiter::set_loiter_position()
 
 	_loiter_pos_set = true;
 
+	// 실제로 mission item 채우기. 2번째 인자는 최소 마진
 	// set current mission item to loiter
 	set_loiter_item(&_mission_item, _navigator->get_loiter_min_alt());
 

@@ -379,6 +379,7 @@ bool Geofence::insidePolygon(const PolygonInfo &polygon, double lat, double lon,
 {
 	//PNPOLY 알고리즘 이용해서 각 vertex의 좌표를 가지고 인자로 받은 lat, lon, 고도가 fence내에 포함되는지 여부를 확인
 	// 여기 참고 : https://wrf.ecse.rpi.edu//Research/Short_Notes/pnpoly.html
+	// 테스트할 x, y 점을 지나는 x 축에 평행한 직선을 그어서 테스트
 	/* Adaptation of algorithm originally presented as
 	 * PNPOLY - Point Inclusion in Polygon Test
 	 * W. Randolph Franklin (WRF)
@@ -389,7 +390,7 @@ bool Geofence::insidePolygon(const PolygonInfo &polygon, double lat, double lon,
 	mission_fence_point_s temp_vertex_j;
 	bool c = false;
 
-	// vertex의 처음 인덱스부터 증가, vertex의 마지막 인덱스부터 감소 시키는 방식으로 2개 vertex를 읽어서 처리
+	// vertex의 처음 인덱스부터 증가, polygon의 2개 vertex : temp_vertex_i, temp_vertex_j 가지고 
 	for (unsigned i = 0, j = polygon.vertex_count - 1; i < polygon.vertex_count; j = i++) {
 		//dm에서 앞쪽 vertex 읽기
 		if (dm_read(DM_KEY_FENCE_POINTS, polygon.dataman_index + i, &temp_vertex_i,
@@ -397,7 +398,7 @@ bool Geofence::insidePolygon(const PolygonInfo &polygon, double lat, double lon,
 			break;
 		}
 
-		//dm에서 뒤쪽 vertex 읽기
+		//dm에서 뒤쪽 vertey 읽기
 		if (dm_read(DM_KEY_FENCE_POINTS, polygon.dataman_index + j, &temp_vertex_j,
 			    sizeof(mission_fence_point_s)) != sizeof(mission_fence_point_s)) {
 			break;
@@ -411,7 +412,7 @@ bool Geofence::insidePolygon(const PolygonInfo &polygon, double lat, double lon,
 			break;
 		}
 
-		//lon이 i와 j의 vertex 사이에 있어야 하고, ....
+		//lon이 i와 j의 vertex 사이에 있어야 하고, lon : testy, lat : testx 
 		if (((double)temp_vertex_i.lon >= lon) != ((double)temp_vertex_j.lon >= lon) &&
 		    (lat <= (double)(temp_vertex_j.lat - temp_vertex_i.lat) * (lon - (double)temp_vertex_i.lon) /
 		     (double)(temp_vertex_j.lon - temp_vertex_i.lon) + (double)temp_vertex_i.lat)) {

@@ -71,17 +71,21 @@ Mission::Mission(Navigator *navigator) :
 void
 Mission::on_inactive()
 {
+	// mission cruising speed는 리셋하지만 mission velocity는 RTL을 위해 설정될 수 있으므로 리셋하지 않는다. 
 	/* We need to reset the mission cruising speed, otherwise the
 	 * mission velocity which might have been set using mission items
 	 * is used for missions such as RTL. */
 	_navigator->set_cruising_speed();
 
+	// home position 없으면 아래 동작 진입 불가. 
 	/* Without home a mission can't be valid yet anyway, let's wait. */
 	if (!_navigator->home_position_valid()) {
 		return;
 	}
 
-	if (_inited) {
+	// 
+	if (_inited) { //아래 초기화 한 번 하고 나서 부터는 이 부분이 실행
+		// offboard mission이 들어온 것이 있는지 보고 mission이 존재하면 offboard 타입으로 지정
 		bool offboard_updated = false;
 		orb_check(_navigator->get_offboard_mission_sub(), &offboard_updated);
 
@@ -93,6 +97,7 @@ Mission::on_inactive()
 			}
 		}
 
+		// 현재 offboard 미션을 reset 필요성 여부 체크해서 
 		/* reset the current offboard mission if needed */
 		if (need_to_reset_mission(false)) {
 			reset_offboard_mission(_offboard_mission);
@@ -100,8 +105,8 @@ Mission::on_inactive()
 			_navigator->reset_cruising_speed();
 		}
 
-	} else {
-
+	} else { //처음 실행 되는 부분
+		// mission_state을 dm에서 읽어와서 mission이 들어있는 dm 주소나 실행 index 등의 정보를 수집.
 		/* load missions from storage */
 		mission_s mission_state = {};
 
@@ -121,6 +126,7 @@ Mission::on_inactive()
 			find_offboard_land_start();
 		}
 
+		// 실행할 misstion이 정상적인지 체크
 		/* On init let's check the mission, maybe there is already one available. */
 		check_mission_valid(false);
 
@@ -142,6 +148,7 @@ Mission::on_inactive()
 void
 Mission::on_inactivation()
 {
+	// 카메라 관련 trigger를 pause 하도록 설정
 	// Disable camera trigger
 	vehicle_command_s cmd = {};
 	cmd.command = vehicle_command_s::VEHICLE_CMD_DO_TRIGGER_CONTROL;
@@ -151,11 +158,12 @@ Mission::on_inactivation()
 	_navigator->publish_vehicle_cmd(&cmd);
 }
 
+//처음 mission을 실행할때 waypoint 변경이 여부를 확인하고 
 void
 Mission::on_activation()
 {
 	if (_mission_waypoints_changed) {
-		//현재 위치와 가장 가까운 곳의 mission index 찾는 것은 normal 미션이 아님
+		//nomal 모드가 아닌 경우에는 그냥 가장 가까운 mission을 실행 시킨다.
 		// do not set the closest mission item in the normal mission mode
 		if (_mission_execution_mode != mission_result_s::MISSION_EXECUTION_MODE_NORMAL) {
 			_current_offboard_mission_index = index_closest_mission_item();
@@ -170,6 +178,7 @@ Mission::on_activation()
 	//dm에서 mission을 가져와서 mission item을 설정
 	set_mission_items();
 
+	// 비행체에 있는 카메라 동작되도록 설정
 	// unpause triggering if it was paused
 	vehicle_command_s cmd = {};
 	cmd.command = vehicle_command_s::VEHICLE_CMD_DO_TRIGGER_CONTROL;
@@ -383,7 +392,7 @@ Mission::set_execution_mode(const uint8_t mode)
 	}
 }
 
-// dm의 mission 중에 착륙 관련 명령(NAV_CMD_LAND, MAV_CMD_DO_LAND_START)이 있는지 여부를 확인
+// dm의 mission 중에 착륙 관련 명령(NAV_CMD_LAND, MAV_CMD_DO_LAND_START)이 있는지 여부를 확인. _land_start_index 에 저장
 bool
 Mission::find_offboard_land_start()
 {
@@ -449,6 +458,7 @@ Mission::landing()
 	return mission_valid && on_landing_stage;
 }
 
+//mission을 새로 subscribe한 경우, 새로 받은 mission을 실행하기 위해서 
 void
 Mission::update_offboard_mission()
 {
@@ -479,12 +489,12 @@ Mission::update_offboard_mission()
 
 			/* otherwise, just leave it */
 		}
-
+		// 정상적인 처리가 가능한 mission인지 검사 
 		check_mission_valid(true);
-
+		// mission 유효성 검사 후 유효하지 않다고 판단된 경우 
 		failed = !_navigator->get_mission_result()->valid;
 
-		if (!failed) {
+		if (!failed) { // 유효한 경우, 초기화 
 			/* reset mission failure if we have an updated valid mission */
 			_navigator->get_mission_result()->failure = false;
 
@@ -497,6 +507,7 @@ Mission::update_offboard_mission()
 			_mission_changed = true;
 		}
 
+		// 비행 중에 waypoint 미션이 변경된 경우, 미션이 변경되었다는 _mission_waypoints_changed 변수를 설정
 		/* check if the mission waypoints changed while the vehicle is in air
 		 * TODO add a flag to mission_s which actually tracks if the position of the waypoint changed */
 		if (((_offboard_mission.count != old_offboard_mission.count) ||
@@ -509,6 +520,7 @@ Mission::update_offboard_mission()
 		PX4_ERR("offboard mission update failed, handle: %d", _navigator->get_offboard_mission_sub());
 	}
 
+	// 유효한 mission이 아닌 경우 아래와 같이 초기화 
 	if (failed) {
 		_offboard_mission.count = 0;
 		_offboard_mission.current_seq = 0;
@@ -517,9 +529,11 @@ Mission::update_offboard_mission()
 		PX4_ERR("mission check failed");
 	}
 
+	// 착륙 가능한 mission이 있는지 찾아놓기
 	// find and store landing start marker (if available)
 	find_offboard_land_start();
 
+	// 수행할 mission iterm 설정
 	set_current_offboard_mission_item();
 }
 
@@ -533,7 +547,7 @@ Mission::advance_mission()
 	}
 
 	switch (_mission_type) {
-	case MISSION_TYPE_OFFBOARD:
+	case MISSION_TYPE_OFFBOARD: // offboard 미션인 경우, 정상인 상황에서는 다음 mission을 찾기 위해 index만 증가
 		switch (_mission_execution_mode) {
 		case mission_result_s::MISSION_EXECUTION_MODE_NORMAL:
 		case mission_result_s::MISSION_EXECUTION_MODE_FAST_FORWARD: {
@@ -541,7 +555,7 @@ Mission::advance_mission()
 				break;
 			}
 
-		case mission_result_s::MISSION_EXECUTION_MODE_REVERSE: {
+		case mission_result_s::MISSION_EXECUTION_MODE_REVERSE: { // reverse 모드인 경우 현재 index에서 감소시키면서 position 관련 mission이 있는지 확인
 				// find next position item in reverse order
 				dm_item_t dm_current = (dm_item_t)(_offboard_mission.dataman_id);
 
@@ -554,19 +568,19 @@ Mission::advance_mission()
 						PX4_ERR("dataman read failure");
 						break;
 					}
-
+					// position 정보가 있는 mission item이면 index를 설정하고 종료
 					if (item_contains_position(missionitem)) {
 						_current_offboard_mission_index = i;
 						return;
 					}
 				}
-
+				// mission 종료
 				// finished flying back the mission
 				_current_offboard_mission_index = -1;
 				break;
 			}
 
-		default:
+		default: //기본은 index 증가해서 다음 mission 가져오기
 			_current_offboard_mission_index++;
 		}
 
@@ -581,39 +595,44 @@ Mission::advance_mission()
 void
 Mission::set_mission_items()
 {
+	// foh에서 사용하는 목적의 변수 초기화
 	/* reset the altitude foh (first order hold) logic, if altitude foh is enabled (param) a new foh element starts now */
 	_min_current_sp_distance_xy = FLT_MAX;
 
+	// QGC 사용자에게 상태 알림이 필요한 경우 알람을 수행했는지 여부 체크 변수
 	/* the home dist check provides user feedback, so we initialize it to this */
 	bool user_feedback_done = false;
 
+	// 위치 정보를 가지는 다음 mission item
 	/* mission item that comes after current if available */
 	struct mission_item_s mission_item_next_position;
 	bool has_next_position_item = false;
 
 	work_item_type new_work_item_type = WORK_ITEM_TYPE_DEFAULT;
 
+	// 현재 misson item과 다음 position을 가지는 item을 얻어오기
 	if (prepare_mission_items(&_mission_item, &mission_item_next_position, &has_next_position_item)) {
+		// mission type이 다른 타입에서 offboard로 변경된 경우에 대해서 알림. 
 		/* if mission type changed, notify */
 		if (_mission_type != MISSION_TYPE_OFFBOARD) {
 			mavlink_log_info(_navigator->get_mavlink_log_pub(),
 					 _mission_execution_mode == mission_result_s::MISSION_EXECUTION_MODE_REVERSE ? "Executing Reverse Mission" :
 					 "Executing Mission");
-			user_feedback_done = true;
+			user_feedback_done = true; // 알림 완료 설정
 		}
-
+		//offboard로 설정
 		_mission_type = MISSION_TYPE_OFFBOARD;
 
-	} else {
+	} else { // mission이 유효하지 않거나 종료된 경우 일 수 있으므로 loiter 모드로 변경하고 빠져나감.
 		/* no mission available or mission finished, switch to loiter */
 		if (_mission_type != MISSION_TYPE_NONE) {
-
+			// 착륙한 상태면 로그
 			if (_navigator->get_land_detected()->landed) {
 				mavlink_log_info(_navigator->get_mavlink_log_pub(),
 						 _mission_execution_mode == mission_result_s::MISSION_EXECUTION_MODE_REVERSE ? "Reverse Mission finished, landed" :
 						 "Mission finished, landed.");
 
-			} else {
+			} else { // 착륙한 상태가 아니면 loiter 가능 모드로 설정
 				/* https://en.wikipedia.org/wiki/Loiter_(aeronautics) */
 				mavlink_log_info(_navigator->get_mavlink_log_pub(),
 						 _mission_execution_mode == mission_result_s::MISSION_EXECUTION_MODE_REVERSE ? "Reverse Mission finished, loitering" :
@@ -625,9 +644,10 @@ Mission::set_mission_items()
 
 			user_feedback_done = true;
 		}
-
+		// mission type을 None으로 설정
 		_mission_type = MISSION_TYPE_NONE;
 
+		// loiter mission 설정
 		/* set loiter mission item and ensure that there is a minimum clearance from home */
 		set_loiter_item(&_mission_item, _navigator->get_takeoff_min_alt());
 
@@ -638,6 +658,7 @@ Mission::set_mission_items()
 		mission_item_to_position_setpoint(_mission_item, &pos_sp_triplet->current);
 		pos_sp_triplet->next.valid = false;
 
+		// IDLE 상태(착륙상태)가 아닌 경우 loiter 가능 상태로 설정
 		/* reuse setpoint for LOITER only if it's not IDLE */
 		_navigator->set_can_loiter_at_sp(pos_sp_triplet->current.type == position_setpoint_s::SETPOINT_TYPE_LOITER);
 
@@ -645,7 +666,7 @@ Mission::set_mission_items()
 		_navigator->get_mission_result()->finished = true;
 		_navigator->set_mission_result_updated();
 
-		if (!user_feedback_done) {
+		if (!user_feedback_done) { // mission item 수행하면서 최소한 사용자에게 정보를 알려주기 위해서. 여기까지 정보 알림이 없었다면 아래 정보 제공하도록
 			/* only tell users that we got no mission if there has not been any
 			 * better, more specific feedback yet
 			 * https://en.wikipedia.org/wiki/Loiter_(aeronautics)
@@ -666,12 +687,14 @@ Mission::set_mission_items()
 		return;
 	}
 
+	//mission item 정상 수행하는 경우
 	/*********************************** handle mission item *********************************************/
 
 	/* handle mission items depending on the mode */
 
 	const position_setpoint_s current_setpoint_copy = _navigator->get_position_setpoint_triplet()->current;
 
+	//position 정보를 가진 mission item인 경우
 	if (item_contains_position(_mission_item)) {
 		switch (_mission_execution_mode) {
 		case mission_result_s::MISSION_EXECUTION_MODE_NORMAL:
@@ -683,14 +706,16 @@ Mission::set_mission_items()
 
 				position_setpoint_triplet_s *pos_sp_triplet = _navigator->get_position_setpoint_triplet();
 
+				//지정한 sp로 이동을 위해서 수직 이륙이 필요한 경우라면 takeoff 부터 수행하도록. 
 				/* do takeoff before going to setpoint if needed and not already in takeoff */
 				/* in fixed-wing this whole block will be ignored and a takeoff item is always propagated */
 				if (do_need_vertical_takeoff() &&
 				    _work_item_type == WORK_ITEM_TYPE_DEFAULT &&
 				    new_work_item_type == WORK_ITEM_TYPE_DEFAULT) {
-
+					//takeoff로 지정
 					new_work_item_type = WORK_ITEM_TYPE_TAKEOFF;
 
+					// 원래 수행하기로 한 waypoit를 다음 mission으로 지정하고 takeoff mission을 생성해서 수행
 					/* use current mission item as next position item */
 					mission_item_next_position = _mission_item;
 					mission_item_next_position.nav_cmd = NAV_CMD_WAYPOINT;
@@ -701,6 +726,7 @@ Mission::set_mission_items()
 					mavlink_log_info(_navigator->get_mavlink_log_pub(), "Takeoff to %.1f meters above home.",
 							 (double)(takeoff_alt - _navigator->get_home_position()->alt));
 
+					// takeoff mission 생성
 					_mission_item.nav_cmd = NAV_CMD_TAKEOFF;
 					_mission_item.lat = _navigator->get_global_position()->lat;
 					_mission_item.lon = _navigator->get_global_position()->lon;
@@ -711,11 +737,12 @@ Mission::set_mission_items()
 					_mission_item.autocontinue = true;
 					_mission_item.time_inside = 0.0f;
 
-				} else if (_mission_item.nav_cmd == NAV_CMD_TAKEOFF
+				} else if (_mission_item.nav_cmd == NAV_CMD_TAKEOFF //takeoff 명령인 경우
 					   && _work_item_type == WORK_ITEM_TYPE_DEFAULT
 					   && new_work_item_type == WORK_ITEM_TYPE_DEFAULT
 					   && _navigator->get_vstatus()->is_rotary_wing) {
 
+					// takeoff가 필요없는 경우면서 takeoff명령을 수행 하는 경우 그냥 takeoff를 waypoint 정보로 사용
 					/* if there is no need to do a takeoff but we have a takeoff item, treat is as waypoint */
 					_mission_item.nav_cmd = NAV_CMD_WAYPOINT;
 					/* ignore yaw here, otherwise it might yaw before heading_sp_update takes over */
@@ -726,7 +753,7 @@ Mission::set_mission_items()
 					 */
 					_mission_item.time_inside = 0.0f;
 
-				} else if (_mission_item.nav_cmd == NAV_CMD_VTOL_TAKEOFF
+				} else if (_mission_item.nav_cmd == NAV_CMD_VTOL_TAKEOFF //vtol 이륙 skip
 					   && _work_item_type == WORK_ITEM_TYPE_DEFAULT
 					   && new_work_item_type == WORK_ITEM_TYPE_DEFAULT) {
 
@@ -743,7 +770,7 @@ Mission::set_mission_items()
 					_mission_item.yaw = NAN;
 				}
 
-				// 바로 이전에 이륙 명령을 수행한 경우, 실제 waypoint로 이동
+				// 바로 이전에 이륙 명령을 수행한 경우, waypoint 명령으로 사용
 				/* if we just did a normal takeoff navigate to the actual waypoint now */
 				if (_mission_item.nav_cmd == NAV_CMD_TAKEOFF &&
 				    _work_item_type == WORK_ITEM_TYPE_TAKEOFF &&
@@ -830,6 +857,7 @@ Mission::set_mission_items()
 					new_work_item_type = WORK_ITEM_TYPE_MOVE_TO_LAND_AFTER_TRANSITION;
 				}
 
+				// 착륙지점으로 이동이 필요한 경우 하강하기 전에 착륙지점으로 waypoint 이동이 필요함.
 				/* move to landing waypoint before descent if necessary */
 				if (do_need_move_to_land() &&
 				    (_work_item_type == WORK_ITEM_TYPE_DEFAULT ||
@@ -838,10 +866,12 @@ Mission::set_mission_items()
 
 					new_work_item_type = WORK_ITEM_TYPE_MOVE_TO_LAND;
 
+					// 먼저 착륙지점 이동해야하니까 현재 mission은 다음에 동작으로 보관
 					/* use current mission item as next position item */
 					mission_item_next_position = _mission_item;
 					has_next_position_item = true;
 
+					// waypoint 고도 무시. 너무 빠르게 하강하는 것을 막기 위해서 동일한 고도로 설정. 
 					/*
 					 * Ignoring waypoint altitude:
 					 * Set altitude to the same as we have now to prevent descending too fast into
@@ -850,7 +880,7 @@ Mission::set_mission_items()
 					 * what the altitude means on this waypoint type.
 					 */
 					float altitude = _navigator->get_global_position()->alt;
-
+					// 사용자의 고도 지정이 있었다면 해당 고도로 설정. 지정이 없으면 현재 고도를 사용.
 					if (pos_sp_triplet->current.valid
 					    && pos_sp_triplet->current.type == position_setpoint_s::SETPOINT_TYPE_POSITION) {
 						altitude = pos_sp_triplet->current.alt;
@@ -865,7 +895,7 @@ Mission::set_mission_items()
 				} else if (_mission_item.nav_cmd == NAV_CMD_LAND && _work_item_type == WORK_ITEM_TYPE_DEFAULT) {
 					if (_mission_item.land_precision > 0 && _mission_item.land_precision < 3) {
 						new_work_item_type = WORK_ITEM_TYPE_PRECISION_LAND;
-
+						// precland이 설정된 경우 precland 실행
 						if (_mission_item.land_precision == 1) {
 							_navigator->get_precland()->set_mode(PrecLandMode::Opportunistic);
 
@@ -877,14 +907,14 @@ Mission::set_mission_items()
 
 					}
 				}
-
+				// 착륙지점으로 이동했으면 이제 하강 수행
 				/* we just moved to the landing waypoint, now descend */
 				if (_work_item_type == WORK_ITEM_TYPE_MOVE_TO_LAND &&
 				    new_work_item_type == WORK_ITEM_TYPE_DEFAULT) {
-
+					// precland 모드면 precland 수행
 					if (_mission_item.land_precision > 0 && _mission_item.land_precision < 3) {
 						new_work_item_type = WORK_ITEM_TYPE_PRECISION_LAND;
-
+						// 
 						if (_mission_item.land_precision == 1) {
 							_navigator->get_precland()->set_mode(PrecLandMode::Opportunistic);
 
@@ -897,7 +927,7 @@ Mission::set_mission_items()
 					}
 
 				}
-
+				// 착륙 명령시 yaw는 무시. 만약 heading이 필요한 경우면 하강 하기전에 비행체의 heading을 설정하는 단계 추가 가능.
 				/* ignore yaw for landing items */
 				/* XXX: if specified heading for landing is desired we could add another step before the descent
 				 * that aligns the vehicle first */
@@ -905,7 +935,7 @@ Mission::set_mission_items()
 					_mission_item.yaw = NAN;
 				}
 
-
+				// fast_forward 모드(loiter 하지 않고 waypoint 지점만 찍는 비행)인 경우 자동으로 계속 mission들 수행하도록 설정.
 				// for fast forward convert certain types to simple waypoint
 				// XXX: add other types which should be ignored in fast forward
 				if (_mission_execution_mode == mission_result_s::MISSION_EXECUTION_MODE_FAST_FORWARD &&
@@ -918,7 +948,7 @@ Mission::set_mission_items()
 
 				break;
 			}
-
+		// reverse 모드인 경우 현재 mission item에 position정보가 있는 경우 waypoint 명령으로 연속 수행으로 설정
 		case mission_result_s::MISSION_EXECUTION_MODE_REVERSE: {
 				if (item_contains_position(_mission_item)) {
 					// convert mission item to a simple waypoint
@@ -934,13 +964,13 @@ Mission::set_mission_items()
 			}
 		}
 
-	} else {
+	} else { 	//position 정보가 없는 mission item 처리
 		/* handle non-position mission items such as commands */
 		switch (_mission_execution_mode) {
 		case mission_result_s::MISSION_EXECUTION_MODE_NORMAL:
 		case mission_result_s::MISSION_EXECUTION_MODE_FAST_FORWARD: {
 				position_setpoint_triplet_s *pos_sp_triplet = _navigator->get_position_setpoint_triplet();
-
+				// vtol 경우 skip
 				/* turn towards next waypoint before MC to FW transition */
 				if (_mission_item.nav_cmd == NAV_CMD_DO_VTOL_TRANSITION
 				    && _work_item_type == WORK_ITEM_TYPE_DEFAULT
@@ -957,18 +987,19 @@ Mission::set_mission_items()
 					mission_apply_limitation(_mission_item);
 					mission_item_to_position_setpoint(mission_item_next_position, &pos_sp_triplet->current);
 				}
-
+				// yaw가 맞추는 단계. vtol skip
 				/* yaw is aligned now */
 				if (_work_item_type == WORK_ITEM_TYPE_ALIGN &&
 				    new_work_item_type == WORK_ITEM_TYPE_DEFAULT) {
 
 					new_work_item_type = WORK_ITEM_TYPE_DEFAULT;
 
+					// 현재 위치에서 진행 waypoint 방향으로의 yaw 구하기 
 					/* set position setpoint to target during the transition */
 					pos_sp_triplet->previous = pos_sp_triplet->current;
 					generate_waypoint_from_heading(&pos_sp_triplet->current, pos_sp_triplet->current.yaw);
 				}
-
+				// vtol 모드 skip
 				/* don't advance mission after FW to MC command */
 				if (_mission_item.nav_cmd == NAV_CMD_DO_VTOL_TRANSITION
 				    && _work_item_type == WORK_ITEM_TYPE_DEFAULT
@@ -979,7 +1010,7 @@ Mission::set_mission_items()
 
 					new_work_item_type = WORK_ITEM_TYPE_CMD_BEFORE_MOVE;
 				}
-
+				// vtol 모드 skip
 				/* after FW to MC transition finish moving to the waypoint */
 				if (_work_item_type == WORK_ITEM_TYPE_CMD_BEFORE_MOVE &&
 				    new_work_item_type == WORK_ITEM_TYPE_DEFAULT
@@ -992,7 +1023,7 @@ Mission::set_mission_items()
 					_mission_item.autocontinue = true;
 					_mission_item.time_inside = 0.0f;
 				}
-
+				// fast_forward에서는 delay 시간을 0으로 설정해서 해당 명령 바로 넘어가게 하는 방식
 				// ignore certain commands in mission fast forward
 				if ((_mission_execution_mode == mission_result_s::MISSION_EXECUTION_MODE_FAST_FORWARD) &&
 				    (_mission_item.nav_cmd == NAV_CMD_DELAY)) {
@@ -1003,35 +1034,39 @@ Mission::set_mission_items()
 				break;
 			}
 
-		case mission_result_s::MISSION_EXECUTION_MODE_REVERSE: {
+		case mission_result_s::MISSION_EXECUTION_MODE_REVERSE: { //reverse 인 경우 무시
 				// nothing to do, all commands are ignored
 				break;
 			}
 		}
 	}
-
+	// mission item으로부터 sp 지정하기
 	/*********************************** set setpoints and check next *********************************************/
 
 	position_setpoint_triplet_s *pos_sp_triplet = _navigator->get_position_setpoint_triplet();
 
+	// precland가 아닌 경우에 적용. precland인 경우 거기서 처리
 	/* set current position setpoint from mission item (is protected against non-position items) */
 	if (new_work_item_type != WORK_ITEM_TYPE_PRECISION_LAND) {
 		mission_apply_limitation(_mission_item);
 		mission_item_to_position_setpoint(_mission_item, &pos_sp_triplet->current);
 	}
 
+	// 새로 계산한 sp가 변경이 발생한 경우에만 previsou에 저장
 	/* only set the previous position item if the current one really changed */
 	if ((_work_item_type != WORK_ITEM_TYPE_MOVE_TO_LAND) &&
 	    !position_setpoint_equal(&pos_sp_triplet->current, &current_setpoint_copy)) {
 		pos_sp_triplet->previous = current_setpoint_copy;
 	}
-
+	//position mission이 외의 명령을 처리. publish하면 해당 모듈이 처리할 수 있게 하는 역할.
 	/* issue command if ready (will do nothing for position mission items) */
 	issue_command(_mission_item);
 
+	// 새로 시작할 type을 저장 
 	/* set current work item type */
 	_work_item_type = new_work_item_type;
 
+	// 착륙 혹은 idle 상태가 되면 _need_takeoff를 true로 설정. takeoff 없이 waypoint misson 명령이 오는 경우 takeoff부터 동작하도록 돕는 flag.
 	/* require takeoff after landing or idle */
 	if (pos_sp_triplet->current.type == position_setpoint_s::SETPOINT_TYPE_LAND
 	    || pos_sp_triplet->current.type == position_setpoint_s::SETPOINT_TYPE_IDLE) {
@@ -1042,10 +1077,12 @@ Mission::set_mission_items()
 	_navigator->set_can_loiter_at_sp(false);
 	reset_mission_item_reached();
 
+	// offboard인 경우 현재 수행할 mission item을 설정
 	if (_mission_type == MISSION_TYPE_OFFBOARD) {
 		set_current_offboard_mission_item();
 	}
-
+	
+	// autocontinue 설정되어 있고 delay가 0인 경우, 다음 mission이 있는 경우 sp->next에 pos정보 설정
 	if (_mission_item.autocontinue && get_time_inside(_mission_item) < FLT_EPSILON) {
 		/* try to process next mission item */
 		if (has_next_position_item) {
@@ -1053,16 +1090,17 @@ Mission::set_mission_items()
 			mission_apply_limitation(mission_item_next_position);
 			mission_item_to_position_setpoint(mission_item_next_position, &pos_sp_triplet->next);
 
-		} else {
+		} else { // 다음 mission이 없는 경우 
 			/* next mission item is not available */
 			pos_sp_triplet->next.valid = false;
 		}
 
-	} else {
+	} else { // autocontinue가 설정안된 경우 next로 자동 넘어가지 않으므로 next.valid를 false로 설정
 		/* vehicle will be paused on current waypoint, don't set next item */
 		pos_sp_triplet->next.valid = false;
 	}
 
+	// 현재, 이전 sp가 모두 유효하다면 이들 두 지점사이의 거리 구하기 
 	/* Save the distance between the current sp and the previous one */
 	if (pos_sp_triplet->current.valid && pos_sp_triplet->previous.valid) {
 
@@ -1227,6 +1265,7 @@ Mission::heading_sp_update()
 		return;
 	}
 
+	// 비행체가 heading 방향 계산
 	/* Calculate direction the vehicle should point to. */
 
 	double point_from_latlon[2];
@@ -1235,15 +1274,17 @@ Mission::heading_sp_update()
 	point_from_latlon[0] = _navigator->get_global_position()->lat;
 	point_from_latlon[1] = _navigator->get_global_position()->lon;
 
+	// ROI 지정된 경우 ROI 방향으로 heading이 가게 
 	if (_navigator->get_vroi().mode == vehicle_roi_s::ROI_LOCATION && !_param_mnt_yaw_ctl.get()) {
 		point_to_latlon[0] = _navigator->get_vroi().lat;
 		point_to_latlon[1] = _navigator->get_vroi().lon;
 
+		// 과도한 yaw를 막기 위해서 위치가 가까워지면 yaw 계산 안함. (가까운 경우 조금만 위치가 바뀌어도 yaw가 크게 발생하니까)
 		/* stop if positions are close together to prevent excessive yawing */
 		float d_current = get_distance_to_next_waypoint(
 					  point_from_latlon[0], point_from_latlon[1],
 					  point_to_latlon[0], point_to_latlon[1]);
-
+		// 거리가 허용 반경 이상인 경우, roi으로의 yaw를 계산하여 적용
 		if (d_current > _navigator->get_acceptance_radius()) {
 			float yaw = get_bearing_to_next_waypoint(
 					    point_from_latlon[0], point_from_latlon[1],
@@ -1253,7 +1294,8 @@ Mission::heading_sp_update()
 			pos_sp_triplet->current.yaw = _mission_item.yaw;
 		}
 
-	} else {
+	} else { // ROI 모드가 아닌 경우 
+		// waypoint에 도착하여 loiter 하는 경우, 시간을 지정한 경우 현재 처리 없음.
 		/* set yaw angle for the waypoint if a loiter time has been specified */
 		if (_waypoint_position_reached && get_time_inside(_mission_item) > FLT_EPSILON) {
 			// XXX: should actually be param4 from mission item
@@ -1261,7 +1303,7 @@ Mission::heading_sp_update()
 			//_mission_item.yaw = _on_arrival_yaw;
 			//pos_sp_triplet->current.yaw = _mission_item.yaw;
 
-		} else {
+		} else { // 도착해서 loiter 하는 경우 이외. front, back 등과 같이 위치 지정에 따라 yaw 계산하기.
 			//비행체 heading의 파라미터 설정에 따라서 타겟이 home이 경우 home의 lat, lon으로 설정
 			/* target location is home */
 			if ((_param_yawmode.get() == MISSION_YAWMODE_FRONT_TO_HOME
@@ -1304,7 +1346,7 @@ Mission::heading_sp_update()
 
 				} else if (_param_yawmode.get() == MISSION_YAWMODE_FRONT_TO_WAYPOINT
 					   && _navigator->get_vroi().mode == vehicle_roi_s::ROI_WPNEXT && !_param_mnt_yaw_ctl.get()) {
-					// 비행체 기준  roi가 설정된 경우 roi의 yaw offset만큼 yaw변경
+					// 비행체 기준 roi가 설정된 경우 roi의 yaw offset만큼 yaw변경
 					/* if yaw control for the mount is disabled and we have a valid ROI that points to the next
 					 * waypoint, we add the gimbal's yaw offset to the vehicle's yaw */
 					yaw += _navigator->get_vroi().yaw_offset;
@@ -1324,6 +1366,7 @@ Mission::heading_sp_update()
 	_navigator->set_position_setpoint_triplet_updated();
 }
 
+//waypoint 이동시 linear 하게 상승/하강하면서 이동.
 void
 Mission::altitude_sp_foh_update()
 {
@@ -1343,11 +1386,13 @@ Mission::altitude_sp_foh_update()
 		return;
 	}
 
+	// waypoint 허용 범위에 들어온 경우 더 이상 계산할 필요 없음.
 	/* Do not try to find a solution if the last waypoint is inside the acceptance radius of the current one */
 	if (_distance_current_previous - _navigator->get_acceptance_radius(_mission_item.acceptance_radius) < FLT_EPSILON) {
 		return;
 	}
 
+	// 이륙, 착륙 mission 동작이 아닌 경우 FOH 사용하지 않음. 지상과의 거리가 가까운 경우 문제 소지. 
 	/* Don't do FOH for non-missions, landing and takeoff waypoints, the ground may be near
 	 * and the FW controller has a custom landing logic
 	 *
@@ -1362,26 +1407,33 @@ Mission::altitude_sp_foh_update()
 		return;
 	}
 
+	// 현재 위치와 waypoint 사이 수평 거리 계산
 	/* Calculate distance to current waypoint */
 	float d_current = get_distance_to_next_waypoint(_mission_item.lat, _mission_item.lon,
 			  _navigator->get_global_position()->lat, _navigator->get_global_position()->lon);
 
+	// 최대한 작은 거리를 선택. waypoint까지의 거리와 sp변경 되는 동안 이동한 거리 사이 사이에 작은 값을 선택 
 	/* Save distance to waypoint if it is the smallest ever achieved, however make sure that
 	 * _min_current_sp_distance_xy is never larger than the distance between the current and the previous wp */
 	_min_current_sp_distance_xy = math::min(math::min(d_current, _min_current_sp_distance_xy),
 						_distance_current_previous);
 
+	// 수용 반경이 계산한 최소 거리 크면 waypoint 고도를 그대로 설정. (고도를 linear하게 올리는 경우 waypoint 범위가 더 넓으므로 그 안에서 linear하게 올려도 alt가 범위를 벗어나지는 않으니까)
 	/* if the minimal distance is smaller then the acceptance radius, we should be at waypoint alt
 	 * navigator will soon switch to the next waypoint item (if there is one) as soon as we reach this altitude */
 	if (_min_current_sp_distance_xy < _navigator->get_acceptance_radius(_mission_item.acceptance_radius)) {
 		pos_sp_triplet->current.alt = get_absolute_altitude_for_item(_mission_item);
 
-	} else {
+	} else {  // linear하게 올라가다가 waypoint 안에서 괜히 고도 허용 범위를 벗어날 수 있으니까. 적정 고도를 다시 계산
 		/* update the altitude sp of the 'current' item in the sp triplet, but do not update the altitude sp
 		 * of the mission item as it is used to check if the mission item is reached
 		 * The setpoint is set linearly and such that the system reaches the current altitude at the acceptance
 		 * radius around the current waypoint
 		 **/
+		// 현재 설정하는 waypoint 근처 허용 반경에서 current alt가 도달하도록. 
+		// delta_alt(sp 업데이트 마다의 고도 변화), grad(수평 거리당 고도(delta_alt / (최대 허용 반경 - 이동할 거리))),
+		// a(이전 sp 고도 - ) 
+		// sp 고도 = 수평 거리당 고도 * 이동할 수평 거리 + 
 		float delta_alt = (get_absolute_altitude_for_item(_mission_item) - pos_sp_triplet->previous.alt);
 		float grad = -delta_alt / (_distance_current_previous - _navigator->get_acceptance_radius(
 						   _mission_item.acceptance_radius));
@@ -1393,7 +1445,7 @@ Mission::altitude_sp_foh_update()
 	_navigator->set_position_setpoint_triplet_updated();
 }
 
-//속도 변경. sp의 curising speed를 변경. 
+//mission 비행 속도 변경. sp의 curising speed를 변경. 
 void
 Mission::cruising_speed_sp_update()
 {
@@ -1401,6 +1453,7 @@ Mission::cruising_speed_sp_update()
 
 	const float cruising_speed = _navigator->get_cruising_speed();
 
+	// 현재 sp가 유효하지 않으면 설정하지 않음.
 	/* Don't change setpoint if the current waypoint is not valid */
 	if (!pos_sp_triplet->current.valid ||
 	    fabsf(pos_sp_triplet->current.cruising_speed - cruising_speed) < FLT_EPSILON) {
@@ -1412,7 +1465,7 @@ Mission::cruising_speed_sp_update()
 	_navigator->set_position_setpoint_triplet_updated();
 }
 
-// 착륙 취소.
+// fw 모드 skip. 착륙 취소.
 // 핵심은 착륙 중에 취소하면 loiter 명령으로 전환된다는 점. 
 void
 Mission::do_abort_landing()
@@ -1468,6 +1521,7 @@ Mission::do_abort_landing()
 	_navigator->publish_vehicle_cmd(&vcmd);
 }
 
+// 현재 mission iterm, 다음 mission item중에 position 정보가 있는 mission item, position item 유무를 나타내는 변수
 bool
 Mission::prepare_mission_items(mission_item_s *mission_item,
 			       mission_item_s *next_position_mission_item, bool *has_next_position_item)
@@ -1480,10 +1534,12 @@ Mission::prepare_mission_items(mission_item_s *mission_item,
 		offset = -1;
 	}
 
+	// 현재 mission item 읽어와서 
 	if (read_mission_item(0, mission_item)) {
 
 		first_res = true;
 
+		// 다음 mission item 읽어서 position 정보가 있는 mission item이면 완료.
 		/* trying to find next position mission item */
 		while (read_mission_item(offset, next_position_mission_item)) {
 
@@ -1505,24 +1561,33 @@ Mission::prepare_mission_items(mission_item_s *mission_item,
 	return first_res;
 }
 
+// 현재 index 기준 offset을 적용한 mission item 가져오기
+// mission item 가져올 때 DO_JUMP로 무한루프 도는 경우를 미리 검사하도록 구현
 bool
 Mission::read_mission_item(int offset, struct mission_item_s *mission_item)
 {
+	// 현재 mission index 기준으로 offset 뒤에 있는 mission item 읽기
 	/* select offboard mission */
 	const int current_index = _current_offboard_mission_index;
 	int index_to_read = current_index + offset;
 
+	// offset이 0이면 현재 index 그대로 사용 아니면 offset 더한 index 사용
 	int *mission_index_ptr = (offset == 0) ? &_current_offboard_mission_index : &index_to_read;
 	const dm_item_t dm_item = (dm_item_t)_offboard_mission.dataman_id;
 
+	// mission이 없는 경우 그냥 false 반환
 	/* do not work on empty missions */
 	if (_offboard_mission.count == 0) {
 		return false;
 	}
 
+	// DO JUMPS가 여러 개 있는 경우 여러 번 반복해봐야 함. 10번 iteration을 넘어가면 DO JUMPS 무한 루프가 있다고 보고 판단.  
+	// mission_index_ptr 으로 검사 대상 mission item을 찾기.
+	// 즉 10번 동안 DO_JUMP -> DO_JUMP .... -> DO_JUMP 반복되는 상황 검사
 	/* Repeat this several times in case there are several DO JUMPS that we need to follow along, however, after
 	 * 10 iterations we have to assume that the DO JUMPS are probably cycling and give up. */
 	for (int i = 0; i < 10; i++) {
+		// 찾기를 원하는 index가 실제 저장된 index 범위를 벗어나는 경우 false
 		if (*mission_index_ptr < 0 || *mission_index_ptr >= (int)_offboard_mission.count) {
 			/* mission item index out of bounds - if they are equal, we just reached the end */
 			if ((*mission_index_ptr != (int)_offboard_mission.count) && (*mission_index_ptr != -1)) {
@@ -1535,9 +1600,11 @@ Mission::read_mission_item(int offset, struct mission_item_s *mission_item)
 
 		const ssize_t len = sizeof(struct mission_item_s);
 
+		// 혹시 dm 데이터에 문제가 있을 수 있으므로 mission_item_tmp 임시 변수 사용해서 체크. 최종 정상이라고 판단되면 memcpy로 복사
 		/* read mission item to temp storage first to not overwrite current mission item if data damaged */
 		struct mission_item_s mission_item_tmp;
 
+		// dm에서 해당 index의 mission item 읽기
 		/* read mission item from datamanager */
 		if (dm_read(dm_item, *mission_index_ptr, &mission_item_tmp, len) != len) {
 			/* not supposed to happen unless the datamanager can't access the SD card, etc. */
@@ -1545,16 +1612,18 @@ Mission::read_mission_item(int offset, struct mission_item_s *mission_item)
 			return false;
 		}
 
+		// 읽어온 mission item이 DO_JUMP item인 경우 검사. 10번 반복 횟수만큼 돌려보기.
 		/* check for DO_JUMP item, and whether it hasn't not already been repeated enough times */
 		if (mission_item_tmp.nav_cmd == NAV_CMD_DO_JUMP) {
 			const bool execute_jumps = _mission_execution_mode == mission_result_s::MISSION_EXECUTION_MODE_NORMAL;
 
+			// 일반 모드(reverse가 아닌)에서 돌리는 경우
 			/* do DO_JUMP as many times as requested if not in reverse mode */
 			if ((mission_item_tmp.do_jump_current_count < mission_item_tmp.do_jump_repeat_count) && execute_jumps) {
 
 				/* only raise the repeat count if this is for the current mission item
 				 * but not for the read ahead mission item */
-				if (offset == 0) {
+				if (offset == 0) { // 현재 실행할 mission item인 경우 do_jump count 증가(정상인 경우 mission item에 복사되므로)
 					(mission_item_tmp.do_jump_current_count)++;
 
 					/* save repeat count */
@@ -1567,31 +1636,33 @@ Mission::read_mission_item(int offset, struct mission_item_s *mission_item)
 					report_do_jump_mission_changed(*mission_index_ptr, mission_item_tmp.do_jump_repeat_count);
 				}
 
+				// do_jump할 다음 mission item을 가져오기 위해서 다음 mission item index는 do_jump_mission_index가 됨.
 				/* set new mission item index and repeat
 				 * we don't have to validate here, if it's invalid, we should realize this later .*/
 				*mission_index_ptr = mission_item_tmp.do_jump_mission_index;
 
-			} else {
-				if (offset == 0 && execute_jumps) {
+			} else { // repeat이 완료된 경우 or reverse 모드인 경우
+				if (offset == 0 && execute_jumps) { // normal 모드에서 repeat이 완료했다고 메시지 날려주고
 					mavlink_log_info(_navigator->get_mavlink_log_pub(), "DO JUMP repetitions completed.");
 				}
-
+				// reverse인 경우 이전 index mission item 가지고 옴.
 				/* no more DO_JUMPS, therefore just try to continue with next mission item */
 				if (_mission_execution_mode == mission_result_s::MISSION_EXECUTION_MODE_REVERSE) {
 					(*mission_index_ptr)--;
 
-				} else {
+				} else { //normal 모드면 다음 mission item 읽어오기
 					(*mission_index_ptr)++;
 				}
 			}
 
-		} else {
+		} else { //DO_JUMP 아니므로 성공. mission item에 복사
 			/* if it's not a DO_JUMP, then we were successful */
 			memcpy(mission_item, &mission_item_tmp, sizeof(struct mission_item_s));
 			return true;
 		}
 	}
 
+	// 10번 반복했는데 반복되 었으므로 cycle이 있다고 판단!
 	/* we have given up, we don't want to cycle forever */
 	mavlink_log_critical(_navigator->get_mavlink_log_pub(), "DO JUMP is cycling, giving up.");
 	return false;
@@ -1610,12 +1681,15 @@ Mission::save_offboard_mission_state()
 		PX4_ERR("DM_KEY_MISSION_STATE lock failed");
 	}
 
+	// 현재 mission state 읽어와서 
 	/* read current state */
 	int read_res = dm_read(DM_KEY_MISSION_STATE, 0, &mission_state, sizeof(mission_s));
 
 	if (read_res == sizeof(mission_s)) {
+		// 정상적으로 읽어 왔는지 검사 id, items count 검사. 
 		/* data read successfully, check dataman ID and items count */
 		if (mission_state.dataman_id == _offboard_mission.dataman_id && mission_state.count == _offboard_mission.count) {
+			// navigator가 seq만 변경할 수도 있
 			/* navigator may modify only sequence, write modified state only if it changed */
 			if (mission_state.current_seq != _current_offboard_mission_index) {
 				mission_state.timestamp = hrt_absolute_time();
@@ -1765,16 +1839,19 @@ Mission::reset_offboard_mission(struct mission_s &mission)
 	dm_unlock(DM_KEY_MISSION_STATE);
 }
 
-// mission 수행 중에만 reset이 가능. active 인자는 현재 mission이 실행중인 여부를 나타냄. 
+// mission reset 필요 여부를 나타내는 _need_mission_reset 변수 설정. active 인자는 현재 mission이 실행중인 여부를 나타냄. 
+// diarm 상태인 경우는 무조건 _need_mission_reset이 false로 설정. 
 bool
 Mission::need_to_reset_mission(bool active)
 {
+	// disarm인 경우 mission reset이 필요한 상태로 설정이 되어 있을때만 true 반환. 다시 mission reset할 필요없으므로 false 설정.
 	/* reset mission state when disarmed */
 	if (_navigator->get_vstatus()->arming_state != vehicle_status_s::ARMING_STATE_ARMED && _need_mission_reset) {
 		_need_mission_reset = false;
 		return true;
 
 	} else if (_navigator->get_vstatus()->arming_state == vehicle_status_s::ARMING_STATE_ARMED && active) {
+		// disarm 되고 난 후에 reset 필요
 		/* mission is running, need reset after disarm */
 		_need_mission_reset = true;
 	}
@@ -1786,7 +1863,7 @@ Mission::need_to_reset_mission(bool active)
 void
 Mission::generate_waypoint_from_heading(struct position_setpoint_s *setpoint, float yaw)
 {
-	//lat, lon, yaw로부터 1000000 m 떨어진 곳을 향해 간다고 가정했을때의 sp의 lat, lon 구하기.
+	//현재 위치에서 인자 yaw 방향으로 1000000m 떨어진 lat, lon 지정.
 	waypoint_from_heading_and_distance(
 		_navigator->get_global_position()->lat, _navigator->get_global_position()->lon,
 		yaw, 1000000.0f,
