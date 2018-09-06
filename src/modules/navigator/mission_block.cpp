@@ -65,7 +65,8 @@ bool
 MissionBlock::is_mission_item_reached()
 {
 	/* handle non-navigation or indefinite waypoints */
-	// NAV_CMD_DO_Xxxx(mission cmd)의 경우 명령이 전달되었다는 것으로 true으로 반환
+	// navigation과 관련없거나 waypoint가 불명확한 명령 처리. NAV_CMD_DO_Xxxx(mission cmd)의 경우 명령이 전달되었다는 것으로 true으로 반환.
+	// 각 mission block에서 mission item 만들때 생성한 nav_cmd를 보고 true/flase 반환값 살펴보기
 	switch (_mission_item.nav_cmd) {
 	case NAV_CMD_DO_SET_SERVO:
 		return true;
