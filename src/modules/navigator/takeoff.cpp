@@ -55,9 +55,10 @@ Takeoff::on_activation()
 void
 Takeoff::on_active()
 {
-	//rep는 언제 valid한가? (rep의 경우 요청한 값이다.)
+	//착륙 중에도 혹시 commander로부터 repostion 명령이 있었는지 체크 
 	struct position_setpoint_triplet_s *rep = _navigator->get_takeoff_triplet();
 
+	// reposition 명령이 있었으면 reposition 에 따름
 	if (rep->current.valid) {
 		// reset the position
 		set_takeoff_position();
@@ -77,7 +78,7 @@ Takeoff::on_active()
 	}
 }
 
-// takeoff 고도를 정해서 mission item 만들기. 
+// takeoff 고도를 정해서 mission item 만들기. (reposition이면 reposition 위치로, 아니면 takeoff 위치로 이동하도록 mission item설정)
 // misstion item로 setpoint 채우기
 void
 Takeoff::set_takeoff_position()
@@ -96,7 +97,7 @@ Takeoff::set_takeoff_position()
 		min_abs_altitude = _navigator->get_takeoff_min_alt();
 	}
 
-	// home position이 유효한 경우 위에서 정한 alt로 설정
+	// rep가 유효한 경우 rep의 고도로 설정.
 	// Use altitude if it has been set. If home position is invalid use min_abs_altitude
 	if (rep->current.valid && PX4_ISFINITE(rep->current.alt) && _navigator->home_position_valid()) {
 		abs_altitude = rep->current.alt;
@@ -104,7 +105,7 @@ Takeoff::set_takeoff_position()
 		// rep의 고도와 위에서 설정한 고도 중에서 큰 값을 선택. rep의 고도가 작은 경우 이를 알린다. (rep의 경우 요청한 값이므로 이 요청이 받아들이지 않은 경우 알려줘야 한다.)
 		// If the altitude suggestion is lower than home + minimum clearance, raise it and complain.
 		if (abs_altitude < min_abs_altitude) {
-			if (abs_altitude < min_abs_altitude - 0.1f) { // don't complain if difference is smaller than 10cm
+			if (abs_altitude < min_abs_altitude - 0.1f) { //don't complain if difference is smaller than 10cm
 				mavlink_log_critical(_navigator->get_mavlink_log_pub(),
 						     "Using minimum takeoff altitude: %.2f m", (double)_navigator->get_takeoff_min_alt());
 			}
@@ -112,7 +113,7 @@ Takeoff::set_takeoff_position()
 			abs_altitude = min_abs_altitude;
 		}
 
-	} else {
+	} else { //rep가 아닌 일반 상황. 위에서 구한 최소 고도를 사용
 		// rep가 유효하지 않은 경우 
 		// Use home + minimum clearance but only notify.
 		abs_altitude = min_abs_altitude;
@@ -120,7 +121,7 @@ Takeoff::set_takeoff_position()
 				 "Using minimum takeoff altitude: %.2f m", (double)_navigator->get_takeoff_min_alt());
 	}
 
-	//takeoff할 고도보다 현재 고도가 더 높다면 현재 고도로 (그렇지 않으면 아래로 내려가게 되니까.)
+	//takeoff할 고도보다 현재 고도가 더 높다면 현재 고도로 설정 (그렇지 않으면 아래로 내려가게 되니까.)
 	if (abs_altitude < _navigator->get_global_position()->alt) {
 		// If the suggestion is lower than our current alt, let's not go down.
 		abs_altitude = _navigator->get_global_position()->alt;

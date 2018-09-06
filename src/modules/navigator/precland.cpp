@@ -57,7 +57,7 @@
 
 #define SEC2USEC 1000000.0f
 
-#define STATE_TIMEOUT 10000000 // [us] Maximum time to spend in any state
+#define STATE_TIMEOUT 10000000 // [us] Maximum time to spend in any state  10초
 
 PrecLand::PrecLand(Navigator *navigator) :
 	MissionBlock(navigator),
@@ -119,6 +119,7 @@ PrecLand::on_active()
 		_target_pose_valid = true;
 	}
 
+	// timeout 시간이 지나면 target_pos_valid를 false로 설정
 	if ((hrt_elapsed_time(&_target_pose.timestamp) / 1e6f) > _param_timeout.get()) {
 		_target_pose_valid = false;
 	}
@@ -165,10 +166,11 @@ PrecLand::on_active()
 
 }
 
+//precland 시작 동작
 void
 PrecLand::run_state_start()
 {
-	// 수평 접근 상태로 전환 가능하면 전환
+	// 수평 접근 상태로 전환 가능하면 전환하고 빠져나감.
 	// check if target visible and go to horizontal approach
 	if (switch_to_state_horizontal_approach()) {
 		return;
@@ -182,6 +184,7 @@ PrecLand::run_state_start()
 		}
 	}
 
+	// pos sp와 현재 위치 사이의 거리 구하기
 	position_setpoint_triplet_s *pos_sp_triplet = _navigator->get_position_setpoint_triplet();
 	float dist = get_distance_to_next_waypoint(pos_sp_triplet->current.lat, pos_sp_triplet->current.lon,
 			_navigator->get_global_position()->lat, _navigator->get_global_position()->lon);
@@ -189,22 +192,22 @@ PrecLand::run_state_start()
 	// 허용 범위내로 들어가면 타겟을 탐색. 
 	// check if we've reached the start point
 	if (dist < _navigator->get_acceptance_radius()) {
-		if (!_point_reached_time) {
+		if (!_point_reached_time) { // 허용 범위내에 처음 들어간 시간 저장
 			_point_reached_time = hrt_absolute_time();
 		}
 		// 1초 후에 타겟을 탐색하지 못했다면 다시 탐색.
 		// if we don't see the target after 1 second, search for it
-		if (_param_search_timeout.get() > 0) {
+		if (_param_search_timeout.get() > 0) { // timeout 시간이 지정되어 있는 경우 
 
-			if (hrt_absolute_time() - _point_reached_time > 2000000) {
-				if (!switch_to_state_search()) {
-					if (!switch_to_state_fallback()) {
+			if (hrt_absolute_time() - _point_reached_time > 2000000) { //허용 범위에 들어가서 2초 지나면 타겟 찾기하고 못 찾으면 일반 착륙모드로
+				if (!switch_to_state_search()) {  // 다시 찾는 시도 하고 
+					if (!switch_to_state_fallback()) {  // 못찾았으면 그냥 일반 착륙으로 동작!
 						PX4_ERR("Can't switch to search or fallback landing");
 					}
 				}
 			}
 
-		} else {
+		} else { // timeout이 시간이 0이면 바로 일반 착륙으로 전환
 			if (!switch_to_state_fallback()) {
 				PX4_ERR("Can't switch to search or fallback landing");
 			}
@@ -212,16 +215,18 @@ PrecLand::run_state_start()
 	}
 }
 
+// 수평 접근 모드 수행
 void
 PrecLand::run_state_horizontal_approach()
 {
 	position_setpoint_triplet_s *pos_sp_triplet = _navigator->get_position_setpoint_triplet();
 
-	// 수평접근 가능한 상태가 아니라면(타겟을 놓친 경우), 현재 위치에서 타겟을 찾기 위해서 sp를 현재 위치로 설정
+	// 수평접근 가능한 상태가 아니라면(타겟을 놓친 경우, 허용 범위 벗어난 경우), 현재 위치에서 타겟을 찾기 위해서 sp를 현재 위치로 설정
 	// check if target visible, if not go to start
 	if (!check_state_conditions(PrecLandState::HorizontalApproach)) {
 		PX4_WARN("Lost landing target while landing (horizontal approach).");
 
+		// 타겟을 찾기 위해서 현재 위치에서 대기하도록
 		// Stay at current position for searching for the landing target
 		pos_sp_triplet->current.lat = _navigator->get_global_position()->lat;
 		pos_sp_triplet->current.lon = _navigator->get_global_position()->lon;
@@ -229,7 +234,7 @@ PrecLand::run_state_horizontal_approach()
 
 		// START 상태로 전환하거나 일반 착륙 모드로 전환
 		if (!switch_to_state_start()) {
-			if (!switch_to_state_fallback()) {
+			if (!switch_to_state_fallback()) { // start모드도 실패한 경우면 그냥 일반 착륙 모드로
 				PX4_ERR("Can't switch to fallback landing");
 			}
 		}
@@ -239,11 +244,11 @@ PrecLand::run_state_horizontal_approach()
 
 	// 타겟 위에서 하강 가능한 상태라면, 하강 상태로 전환
 	if (check_state_conditions(PrecLandState::DescendAboveTarget)) {
-		if (!_point_reached_time) {
+		if (!_point_reached_time) { 
 			_point_reached_time = hrt_absolute_time();
 		}
 
-		if (hrt_absolute_time() - _point_reached_time > 2000000) {
+		if (hrt_absolute_time() - _point_reached_time > 2000000) { //DescendAboveTarget 전환 가능한 상태로 2초 이상 지났으면 DescendAboveTarget 상태로 전환 
 			// if close enough for descent above target go to descend above target
 			if (switch_to_state_descend_above_target()) {
 				return;
@@ -252,7 +257,7 @@ PrecLand::run_state_horizontal_approach()
 
 	}
 
-	// 수평이동 상태로 너무 오래 남아 있는 경우, 그냥 일반 착륙 모드로 전환
+	// 수평이동 상태로 너무 오래 남아 있는 경우(10초 이상), 그냥 일반 착륙 모드로 전환
 	if (hrt_absolute_time() - _state_start_time > STATE_TIMEOUT) {
 		PX4_ERR("Precision landing took too long during horizontal approach phase.");
 
@@ -263,13 +268,14 @@ PrecLand::run_state_horizontal_approach()
 		PX4_ERR("Can't switch to fallback landing");
 	}
 
-	float x = _target_pose.x_abs;
-	float y = _target_pose.y_abs;
+	// 수평 이동을 위한 lat, lon 구하기. 정밀 착륙의 경우 타겟을 벗어나지 않게 천천히 이동해야 하므로 최대 이동 속도나 가속도 제한을 가지고 현재 위치구하고 pos sp의 lat, lon을 구한다. 
+	float x = _target_pose.x_abs;  //비행체와 타겟의 NED의 X/north 으로 떨어진 거리 (m단위)
+	float y = _target_pose.y_abs;  //비행체와 타겟의 NED의 Y/east 으로 떨어진 거리 (m단위)
 
-	// x, y로 slew rate를 설정
+	// 최대한 부드럽게 이용할 수 있는 거리 x, y를 계산. slew rate를 설정
 	slewrate(x, y);
 
-	// x,y를 이용해서 lat, lon 구하기. sp로 lat, lon을 사용하니까 이 값을 구해야함.
+	// x,y를 떨어진 곳의 위치 lat, lon 구하기. sp로 lat, lon을 사용하니까 이 값을 구해야함.
 	// XXX need to transform to GPS coords because mc_pos_control only looks at that
 	double lat, lon;
 	map_projection_reproject(&_map_ref, x, y, &lat, &lon);
@@ -494,7 +500,7 @@ bool PrecLand::check_state_conditions(PrecLandState state)
 		return _search_cnt <= _param_max_searches.get();
 
 	case PrecLandState::HorizontalApproach: // 수평 접근
-		// 
+		// 수평접근 상태에서 허용 범위 안에 있는 경우 pose 정보가 정상이면 true를 반환
 		// if we're already in this state, only want to make it invalid if we reached the target but can't see it anymore
 		if (_state == PrecLandState::HorizontalApproach) {
 			if (fabsf(_target_pose.x_abs - vehicle_local_position->x) < _param_hacc_rad.get()
@@ -509,6 +515,7 @@ bool PrecLand::check_state_conditions(PrecLandState state)
 			}
 		}
 
+		// 허용 범위 밖이 경우에는 pose를 업데이트 된 조건이 추가됨. 
 		// If we're trying to switch to this state, the target needs to be visible
 		return _target_pose_updated && _target_pose_valid && _target_pose.abs_pos_valid;
 
@@ -551,6 +558,7 @@ bool PrecLand::check_state_conditions(PrecLandState state)
 
 void PrecLand::slewrate(float &sp_x, float &sp_y)
 {
+	//현재 x, y로 sp_curr 생성
 	matrix::Vector2f sp_curr(sp_x, sp_y);
 	uint64_t now = hrt_absolute_time();
 
@@ -572,20 +580,21 @@ void PrecLand::slewrate(float &sp_x, float &sp_y)
 		dt = 50000 / SEC2USEC;
 
 		// 천천히 전환되도록 하기 위해서 이전 sp 값을 아래와 같이 계산해서 대입. _sp_pev_prev
+		// sp_pev 현재 x, y. sp_pev_prev는 과거 sp로 부드럽게 전환 되도록 하기 위해 계산함.
 		// set a best guess for previous setpoints for smooth transition
 		map_projection_project(&_map_ref, _navigator->get_position_setpoint_triplet()->current.lat,
 				       _navigator->get_position_setpoint_triplet()->current.lon, &_sp_pev(0), &_sp_pev(1));
-		_sp_pev_prev(0) = _sp_pev(0) - _navigator->get_local_position()->vx * dt;
+		_sp_pev_prev(0) = _sp_pev(0) - _navigator->get_local_position()->vx * dt; //이전 거리 = 현재 거리 - (현재 속도 * 시간). 이전과 현재가 대략 속도가 같았다고 가정. 
 		_sp_pev_prev(1) = _sp_pev(1) - _navigator->get_local_position()->vy * dt;
 	}
 
 	_last_slewrate_time = now;
 
-	// sp speed를 최대 비행 속도로 제한하기
+	// sp speed를 최대 비행 속도로 제한한 경우에 sp_curr 구하기
 	// limit the setpoint speed to the maximum cruise speed
 	matrix::Vector2f sp_vel = (sp_curr - _sp_pev) / dt; // velocity of the setpoints
 
-	// 속도(sp_vel)을 가지고 현재의 sp 계산하기(sp_cur)
+	// 최대 속도보다 현재 속도(sp_vel)이 더 크면 줄여야함. 따라서 속도(sp_vel)을 가지고 현재의 sp 계산하기(sp_cur)
 	if (sp_vel.length() > _param_xy_vel_cruise.get()) {
 		sp_vel = sp_vel.normalized() * _param_xy_vel_cruise.get();
 		sp_curr = _sp_pev + sp_vel * dt;
@@ -595,7 +604,7 @@ void PrecLand::slewrate(float &sp_x, float &sp_y)
 	// limit the setpoint acceleration to the maximum acceleration
 	matrix::Vector2f sp_acc = (sp_curr - _sp_pev * 2 + _sp_pev_prev) / (dt * dt); // acceleration of the setpoints
 
-	// 가속도(sp_acc)를 가지고 현재 sp 계산하기(sp_curr)
+	// 최대 가속도가 현재 가속도보다 크면 줄여야함. 가속도(sp_acc)를 가지고 현재 sp 계산하기(sp_curr)
 	if (sp_acc.length() > _param_acceleration_hor.get()) {
 		sp_acc = sp_acc.normalized() * _param_acceleration_hor.get();
 		sp_curr = _sp_pev * 2 - _sp_pev_prev + sp_acc * (dt * dt);
@@ -607,7 +616,7 @@ void PrecLand::slewrate(float &sp_x, float &sp_y)
 			      sp_y))).length());
 	sp_vel = (sp_curr - _sp_pev) / dt; // velocity of the setpoints
 
-	if (sp_vel.length() > max_spd) {
+	if (sp_vel.length() > max_spd) { // 최대 속도보다 크면 줄이도록 sp_curr 다시 계산
 		sp_vel = sp_vel.normalized() * max_spd;
 		sp_curr = _sp_pev + sp_vel * dt;
 	}

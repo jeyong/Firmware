@@ -63,6 +63,8 @@ RCLoss::RCLoss(Navigator *navigator) :
 void
 RCLoss::on_inactive()
 {
+	// 정상으로 돌아온 경우에만 NONE으로 설정
+	// sp가 변경된 경우 RCL 상태를 초기화
 	/* reset RCL state only if setpoint moved */
 	if (!_navigator->get_can_loiter_at_sp()) {
 		_rcl_state = RCL_STATE_NONE;
@@ -72,6 +74,7 @@ RCLoss::on_inactive()
 void
 RCLoss::on_activation()
 {
+	// 시작은 none 상태로 초기화
 	_rcl_state = RCL_STATE_NONE;
 	advance_rcl();
 	set_rcl_item();
@@ -86,7 +89,7 @@ RCLoss::on_active()
 	}
 }
 
-// 
+// rcl state에 따라서 mission item 채우기(설정하는 경우는 loiter와 terminate 2개 밖에 없음) 
 void
 RCLoss::set_rcl_item()
 {
@@ -96,7 +99,7 @@ RCLoss::set_rcl_item()
 	_navigator->set_can_loiter_at_sp(false);
 
 	switch (_rcl_state) {
-	case RCL_STATE_LOITER: {
+	case RCL_STATE_LOITER: {  //현재 고도에서 loiter하게
 			_mission_item.lat = _navigator->get_global_position()->lat;
 			_mission_item.lon = _navigator->get_global_position()->lon;
 			_mission_item.altitude = _navigator->get_global_position()->alt;  // loiter의 고도는 현재 고도로 설정
@@ -139,12 +142,13 @@ RCLoss::set_rcl_item()
 	_navigator->set_position_setpoint_triplet_updated();
 }
 
+// 현재 state 기반으로 다음 state 결정 
 void
 RCLoss::advance_rcl()
 {
 	switch (_rcl_state) {
 	case RCL_STATE_NONE: // loiter 시간이 설정되어 있으면 loiter 모드로 해당 시간동안 loiter, 그렇지 않은 경우 terminate 상태로 설정
-		if (_param_loitertime.get() > 0.0f) {
+		if (_param_loitertime.get() > 0.0f) { // loiter 시간이 설정된 경우 해당 시간 동안 loiter
 			warnx("RC loss, OBC mode, loiter");
 			mavlink_log_critical(_navigator->get_mavlink_log_pub(), "rc loss, loitering");
 			_rcl_state = RCL_STATE_LOITER;
@@ -169,7 +173,7 @@ RCLoss::advance_rcl()
 		reset_mission_item_reached();
 		break;
 
-	case RCL_STATE_TERMINATE:  //rc loss 자동 모드 종료
+	case RCL_STATE_TERMINATE:  //비행 종료 요청 후 rc loss 자동 모드 종료
 		warnx("rcl end");
 		_rcl_state = RCL_STATE_END;
 		break;

@@ -60,7 +60,7 @@ enum class PrecLandState {
 
 enum class PrecLandMode {
 	Opportunistic = 1, // only do precision landing if landing target visible at the beginning 처음에 타겟이 있는 경우에만 prec landing 동작
-	Required = 2 // try to find landing target if not visible at the beginning  처음에 타겟 못찾아도 탐색 동작 시도
+	Required = 2 // try to find landing target if not visible at the beginning  처음에 타겟 못 찾아도 탐색 동작 시도
 };
 
 class PrecLand : public MissionBlock, public ModuleParams
