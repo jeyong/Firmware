@@ -55,7 +55,7 @@ Takeoff::on_activation()
 void
 Takeoff::on_active()
 {
-	//착륙 중에도 혹시 commander로부터 repostion 명령이 있었는지 체크 
+	//유효한 sp가 있는 경우 
 	struct position_setpoint_triplet_s *rep = _navigator->get_takeoff_triplet();
 
 	// reposition 명령이 있었으면 reposition 에 따름
@@ -78,7 +78,7 @@ Takeoff::on_active()
 	}
 }
 
-// takeoff 고도를 정해서 mission item 만들기. (reposition이면 reposition 위치로, 아니면 takeoff 위치로 이동하도록 mission item설정)
+// takeoff 고도를 정해서 mission item 만들기. (유효한 sp가 있는 경우 sp 위치로, 아니면 takeoff 위치로 이동하도록 mission item설정)
 // misstion item로 setpoint 채우기
 void
 Takeoff::set_takeoff_position()

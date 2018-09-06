@@ -162,7 +162,7 @@ Mission::on_inactivation()
 void
 Mission::on_activation()
 {
-	if (_mission_waypoints_changed) {
+	if (_mission_waypoints_changed) { // 수행할 mission index 설정.
 		//nomal 모드가 아닌 경우에는 그냥 가장 가까운 mission을 실행 시킨다.
 		// do not set the closest mission item in the normal mission mode
 		if (_mission_execution_mode != mission_result_s::MISSION_EXECUTION_MODE_NORMAL) {
@@ -270,7 +270,7 @@ Mission::on_active()
 		heading_sp_update();
 	}
 
-	// LAND 명령으로 동작 중에 landing 취소 상태가 되면 landing 취소 동작
+	// fw인 경우 skip - LAND 명령으로 동작 중에 landing 취소 상태가 되면 landing 취소 동작
 	/* check if landing needs to be aborted */
 	if ((_mission_item.nav_cmd == NAV_CMD_LAND)
 	    && (_navigator->abort_landing())) {
@@ -458,7 +458,7 @@ Mission::landing()
 	return mission_valid && on_landing_stage;
 }
 
-//mission을 새로 subscribe한 경우, 새로 받은 mission을 실행하기 위해서 
+//mission을 새로 subscribe한 경우, 새로 받은 mission을 실행하기 위해서 mission item 설정 
 void
 Mission::update_offboard_mission()
 {
@@ -533,7 +533,7 @@ Mission::update_offboard_mission()
 	// find and store landing start marker (if available)
 	find_offboard_land_start();
 
-	// 수행할 mission iterm 설정
+	// 수행할 mission item 설정
 	set_current_offboard_mission_item();
 }
 

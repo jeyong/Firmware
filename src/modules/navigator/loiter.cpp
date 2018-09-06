@@ -66,7 +66,7 @@ Loiter::on_activation()
 	}
 }
 
-//reposition 명령이 들어온 경우 reposition 위치에서 loiter하고 아니면 
+//reposition sp가 유효한 경우 위치 재설정(reposition 수행)위치에서 loiter 
 void
 Loiter::on_active()
 {
@@ -122,6 +122,7 @@ Loiter::set_loiter_position()
 	_navigator->set_position_setpoint_triplet_updated();
 }
 
+// reposition sp로 loiter 수행
 void
 Loiter::reposition()
 {

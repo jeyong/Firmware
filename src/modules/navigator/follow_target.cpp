@@ -204,7 +204,7 @@ void FollowTarget::on_active()
 			_step_vel /= (dt_ms / 1000.0F * (float) INTERPOLATION_PNTS);
 			_step_time_in_ms = (dt_ms / (float) INTERPOLATION_PNTS);
 
-			// 타겟과의 거리가 1미터 이하인 경우 yaw는 신경쓰지 않는다. 1미터 이상 벌어지면 그때부터 yaw 설정이 필요. 놓칠 수 있으니... 
+			// 타겟과의 거리가 1미터 이하인 경우 yaw 설정하지 않ㅇ므. 1미터 이상 벌어지면 그때부터 yaw 설정이 필요. 
 			// if we are less than 1 meter from the target don't worry about trying to yaw
 			// lock the yaw until we are at a distance that makes sense
 

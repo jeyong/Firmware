@@ -99,8 +99,8 @@ PrecLand::on_activation()
 		pos_sp_triplet->current.valid = true;
 	}
 
-	_sp_pev = matrix::Vector2f(0, 0);
-	_sp_pev_prev = matrix::Vector2f(0, 0);
+	_sp_pev = matrix::Vector2f(0, 0); // x,y 이전 떨어진 거리 
+	_sp_pev_prev = matrix::Vector2f(0, 0); // x, y 이전전 떨어진 거리
 	_last_slewrate_time = 0;
 
 	switch_to_state_start();
