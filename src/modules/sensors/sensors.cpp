@@ -300,6 +300,7 @@ Sensors::diff_pres_poll(const vehicle_air_data_s &raw)
 	bool updated;
 	orb_check(_diff_pres_sub, &updated);
 
+	// 기압차 정보를 subscribe 할수 있는
 	if (updated) {
 		differential_pressure_s diff_pres;
 		int ret = orb_copy(ORB_ID(differential_pressure), _diff_pres_sub, &diff_pres);
@@ -307,13 +308,14 @@ Sensors::diff_pres_poll(const vehicle_air_data_s &raw)
 		if (ret != PX4_OK) {
 			return;
 		}
-
+		// -300보다 크면 subscribe한 값을 이용하고 그렇지 않은 경우 raw 정보를 이용
 		float air_temperature_celsius = (diff_pres.temperature > -300.0f) ? diff_pres.temperature :
 						(raw.baro_temp_celcius - PCB_TEMP_ESTIMATE_DEG);
 
 		airspeed_s airspeed;
 		airspeed.timestamp = diff_pres.timestamp;
 
+		// data의 유효성을 검증하기 위한 구조체로 
 		/* push data into validator */
 		float airspeed_input[3] = { diff_pres.differential_pressure_raw_pa, diff_pres.temperature, 0.0f };
 
@@ -322,6 +324,7 @@ Sensors::diff_pres_poll(const vehicle_air_data_s &raw)
 
 		airspeed.confidence = _airspeed_validator.confidence(hrt_absolute_time());
 
+		// device_id로 devicetype 결정
 		enum AIRSPEED_SENSOR_MODEL smodel;
 
 		switch ((diff_pres.device_id >> 16) & 0xFF) {
@@ -341,6 +344,7 @@ Sensors::diff_pres_poll(const vehicle_air_data_s &raw)
 			break;
 		}
 
+		// 음수 값이 들어오는 것을 막기 위해서 0 이상 값
 		/* don't risk to feed negative airspeed into the system */
 		airspeed.indicated_airspeed_m_s = math::max(0.0f,
 						  calc_indicated_airspeed_corrected((enum AIRSPEED_COMPENSATION_MODEL)_parameters.air_cmodel,
@@ -364,6 +368,7 @@ Sensors::diff_pres_poll(const vehicle_air_data_s &raw)
 	}
 }
 
+//비행 모드 설정 subscribe하기
 void
 Sensors::vehicle_control_mode_poll()
 {
@@ -379,6 +384,7 @@ Sensors::vehicle_control_mode_poll()
 	}
 }
 
+// parameter 업데이트 하기
 void
 Sensors::parameter_update_poll(bool forced)
 {
@@ -398,6 +404,7 @@ Sensors::parameter_update_poll(bool forced)
 		/* update airspeed scale */
 		int fd = px4_open(AIRSPEED0_DEVICE_PATH, 0);
 
+		// airspeed 센서는 옵션이라 장착된 경우에, 파라미터에 설정된 scale값을 사용
 		/* this sensor is optional, abort without error */
 		if (fd >= 0) {
 			struct airspeed_scale airscale = {
@@ -540,7 +547,8 @@ Sensors::adc_poll()
 				}
 			}
 
-#if BOARD_NUMBER_BRICKS > 0
+#if 
+ > 0
 
 			if (_parameters.battery_source == 0) {
 
@@ -587,9 +595,9 @@ Sensors::run()
 #endif
 	}
 
-	sensor_combined_s raw = {};
-	vehicle_air_data_s airdata = {};
-	vehicle_magnetometer_s magnetometer = {};
+	sensor_combined_s raw = {};     //accel, gyro 
+	vehicle_air_data_s airdata = {}; //baro
+	vehicle_magnetometer_s magnetometer = {}; //mag
 
 	struct sensor_preflight_s preflt = {};
 
@@ -597,6 +605,7 @@ Sensors::run()
 
 	_voted_sensors_update.init(raw);
 
+	// 파라미터 업데이트
 	/* (re)load params and calibration */
 	parameter_update_poll(true);
 
@@ -611,17 +620,24 @@ Sensors::run()
 
 	_actuator_ctrl_0_sub = orb_subscribe(ORB_ID(actuator_controls_0));
 
+	// 초기값 가져오기
 	/* get a set of initial values */
 	_voted_sensors_update.sensors_poll(raw, airdata, magnetometer);
 
+	// 기압차 얻기
 	diff_pres_poll(airdata);
 
+	// rc 값 얻기
 	_rc_update.rc_parameter_map_poll(_parameter_handles, true /* forced */);
 
+	// sensor에서 읽은 값을 합친 sensor_combined topic을 publish하기 위한 준비
 	/* advertise the sensor_combined topic and make the initial publication */
 	_sensor_pub = orb_advertise(ORB_ID(sensor_combined), &raw);
 	_airdata_pub = orb_advertise(ORB_ID(vehicle_air_data), &airdata);
 	_magnetometer_pub = orb_advertise(ORB_ID(vehicle_magnetometer), &magnetometer);
+
+	// sensor_preflight topic을 publish하기 위한 준비.
+	// 비행전 센서 검사 항목으로 여러 IMU 센서를 사용하는 경우 accel, gyro, mag 각각에 대한 최대 차이값
 
 	/* advertise the sensor_preflight topic and make the initial publication */
 	preflt.accel_inconsistency_m_s_s = 0.0f;
@@ -644,6 +660,7 @@ Sensors::run()
 		/* use the best-voted gyro to pace output */
 		poll_fds.fd = _voted_sensors_update.best_gyro_fd();
 
+		// 최대 50ms 까지 기다리다가 실패하는 경우 sensor값들을 초기화 시킨다.
 		/* wait for up to 50ms for data (Note that this implies, we can have a fail-over time of 50ms,
 		 * if a gyro fails) */
 		int pret = px4_poll(&poll_fds, 1, 50);

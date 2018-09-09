@@ -68,6 +68,7 @@
 namespace sensors
 {
 
+// voting을 통한 sensor 정보 업데이트 처리
 /**
  ** class VotedSensorsUpdate
  *
@@ -89,6 +90,7 @@ public:
 	int init(sensor_combined_s &raw);
 
 	/**
+	 * 센서 instace 찾기. 실제로는 init() 호출되며 주기적으로 호출
 	 * This tries to find new sensor instances. This is called from init(), then it can be called periodically.
 	 */
 	void initialize_sensors();
@@ -101,23 +103,27 @@ public:
 	void print_status();
 
 	/**
+	 * 파라미터 업데이트. initialize_sensors() 전에 호출되어야 함.
 	 * call this whenever parameters got updated. Make sure to have initialize_sensors() called at least
 	 * once before calling this.
 	 */
 	void parameters_update();
 
 	/**
+	 * 새로운 sensor 데이터 읽기
 	 * read new sensor data
 	 */
 	void sensors_poll(sensor_combined_s &raw, vehicle_air_data_s &airdata, vehicle_magnetometer_s &magnetometer);
 
 	/**
+	 * 각 sensor의 timestamp의 상대적인 timestamp를 설정. 마지막 sensors_poll기반. 이후에 data를 publish할 수 있음. 
 	 * set the relative timestamps of each sensor timestamp, based on the last sensors_poll,
 	 * so that the data can be published.
 	 */
 	void set_relative_timestamps(sensor_combined_s &raw);
 
 	/**
+	 * failover 발생했는지 체크하고 발생했다면 이를 리포팅하기.
 	 * check if a failover event occured. if so, report it.
 	 */
 	void check_failover();
@@ -128,16 +134,19 @@ public:
 	int best_gyro_fd() const { return _gyro.subscription[_gyro.last_best_vote]; }
 
 	/**
+	 * accel primary와 다른 accel 센서들 간에 최대 차이값 계산 (m/s/s) 
 	 * Calculates the magnitude in m/s/s of the largest difference between the primary and any other accel sensor
 	 */
 	void calc_accel_inconsistency(sensor_preflight_s &preflt);
 
 	/**
+	 * gyro primary와 다른 accel 센서들 간에 최대 차이값 계산 (rad/s) 	
 	 * Calculates the magnitude in rad/s of the largest difference between the primary and any other gyro sensor
 	 */
 	void calc_gyro_inconsistency(sensor_preflight_s &preflt);
 
 	/**
+	 * mag primary와 다른 accel 센서들 간에 최대 차이값 계산 (rad/s) 	
 	 * Calculates the magnitude in Gauss of the largest difference between the primary and any other magnetometers
 	 */
 	void calc_mag_inconsistency(sensor_preflight_s &preflt);
@@ -171,6 +180,7 @@ private:
 	void	init_sensor_class(const struct orb_metadata *meta, SensorData &sensor_data, uint8_t sensor_count_max);
 
 	/**
+	 * 업데이트된 accel data를 얻기 위해 poll 
 	 * Poll the accelerometer for updated data.
 	 *
 	 * @param raw			Combined sensor data structure into which
@@ -179,6 +189,7 @@ private:
 	void		accel_poll(struct sensor_combined_s &raw);
 
 	/**
+	 * 업데이트된 gyro data를 얻기 위해 poll
 	 * Poll the gyro for updated data.
 	 *
 	 * @param raw			Combined sensor data structure into which
@@ -187,6 +198,7 @@ private:
 	void		gyro_poll(struct sensor_combined_s &raw);
 
 	/**
+	 * 업데이트된 mag data를 얻기 위해 poll
 	 * Poll the magnetometer for updated data.
 	 *
 	 * @param raw			Combined sensor data structure into which
@@ -195,6 +207,7 @@ private:
 	void		mag_poll(vehicle_magnetometer_s &magnetometer);
 
 	/**
+	 * 업데이트된 baro data를 얻기 위해 poll
 	 * Poll the barometer for updated data.
 	 *
 	 * @param raw			Combined sensor data structure into which
