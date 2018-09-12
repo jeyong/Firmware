@@ -88,6 +88,7 @@ VotedSensorsUpdate::VotedSensorsUpdate(const Parameters &parameters, bool hil_en
 	}
 }
 
+//sensor_combined는 gyro, accel 정보를 가짐
 int VotedSensorsUpdate::init(sensor_combined_s &raw)
 {
 	raw.accelerometer_timestamp_relative = sensor_combined_s::RELATIVE_TIMESTAMP_INVALID;
@@ -101,6 +102,7 @@ int VotedSensorsUpdate::init(sensor_combined_s &raw)
 	return 0;
 }
 
+//4개 센서 topic 초기화
 void VotedSensorsUpdate::initialize_sensors()
 {
 	init_sensor_class(ORB_ID(sensor_gyro), _gyro, GYRO_COUNT_MAX);
@@ -109,6 +111,7 @@ void VotedSensorsUpdate::initialize_sensors()
 	init_sensor_class(ORB_ID(sensor_baro), _baro, BARO_COUNT_MAX);
 }
 
+//undescritpion
 void VotedSensorsUpdate::deinit()
 {
 	for (unsigned i = 0; i < _gyro.subscription_count; i++) {
@@ -128,8 +131,10 @@ void VotedSensorsUpdate::deinit()
 	}
 }
 
+//parameter update
 void VotedSensorsUpdate::parameters_update()
 {
+	// board 진행 방향 기준 센서의 장착 방향에 따른 offset 계산
 	/* fine tune board offset */
 	matrix::Dcmf board_rotation_offset = matrix::Eulerf(
 			M_DEG_TO_RAD_F * _parameters.board_offset[0],
@@ -138,18 +143,26 @@ void VotedSensorsUpdate::parameters_update()
 
 	_board_rotation = board_rotation_offset * get_rot_matrix((enum Rotation)_parameters.board_rotation);
 
+	// 모든 mag 회전을 위에서 계산한 offset 적용한 값으로 초기화. (아직 칼리브리에션 데이터는 적용 전) 
 	// initialze all mag rotations with the board rotation in case there is no calibration data available
 	for (int topic_instance = 0; topic_instance < MAG_COUNT_MAX; ++topic_instance) {
 		_mag_rotation[topic_instance] = _board_rotation;
 	}
 
+	// 이제 센서 칼리브레이션을 load해서 적용. 모든 센서 드라이버는 실행되고 있어야 하고 이 시점부터 sensor data를 publish! 
 	/* Load & apply the sensor calibrations.
 	 * IMPORTANT: we assume all sensor drivers are running and published sensor data at this point
 	 */
 
+	// 온도 보상
 	/* temperature compensation */
 	_temperature_compensation.parameters_update();
 
+	// 여러 gyro 사용하는 경우 해당 gyro sensor마다 topic 만들어 주는데 이를 topic_instance라고 부른다.
+	// gyro.subscription_count가 유효한 gyro의 수. 
+	// 수신한 gyro topic에서 device_id로 온도 보상을 수행. 결과가 0이며 device ID 찾기 실패한 것. 
+	// correction에는 accel, gyro, baro의 scale, offset, 선택된 센서의 instance를 조장.
+	// gyro_mapping[instance] = 온도 보상을 채움.  
 	/* gyro */
 	for (unsigned topic_instance = 0; topic_instance < GYRO_COUNT_MAX; ++topic_instance) {
 
@@ -173,7 +186,10 @@ void VotedSensorsUpdate::parameters_update()
 		}
 	}
 
-
+	// 여러 accel 사용하는 경우 해당 accel sensor마다 topic 만들어 주는데 이를 topic_instance라고 부른다.
+	// accel.subscription_count가 유효한 accel의 수. 
+	// 수신한 accel topic에서 device_id로 온도 보상을 수행. 결과가 0이며 device ID 찾기 실패한 것. 
+	// accel_mapping[instance] = 온도 보상을 채움.  
 	/* accel */
 	for (unsigned topic_instance = 0; topic_instance < ACCEL_COUNT_MAX; ++topic_instance) {
 
@@ -197,6 +213,10 @@ void VotedSensorsUpdate::parameters_update()
 		}
 	}
 
+	// 여러 baro 사용하는 경우 해당 baro sensor마다 topic 만들어 주는데 이를 topic_instance라고 부른다.
+	// baro.subscription_count가 유효한 baro의 수. 
+	// 수신한 baro topic에서 device_id로 온도 보상을 수행. 결과가 0이며 device ID 찾기 실패한 것. 
+	// baro_mapping[instance] = 온도 보상을 채움.  
 	/* baro */
 	for (unsigned topic_instance = 0; topic_instance < BARO_COUNT_MAX; ++topic_instance) {
 
@@ -220,7 +240,7 @@ void VotedSensorsUpdate::parameters_update()
 		}
 	}
 
-
+	//offset 파라미터를 새로운 값으로 설정
 	/* set offset parameters to new values */
 	bool failed;
 	char str[30];
@@ -229,6 +249,7 @@ void VotedSensorsUpdate::parameters_update()
 	unsigned gyro_cal_found_count = 0;
 	unsigned accel_cal_found_count = 0;
 
+	// 모든 gyro 센서를 실행
 	/* run through all gyro sensors */
 	for (unsigned driver_index = 0; driver_index < GYRO_COUNT_MAX; driver_index++) {
 
