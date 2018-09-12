@@ -46,7 +46,7 @@
 
 namespace sensors
 {
-
+// parameter_handles 초기화 : gyro, accel, baro 칼리브레이션 관련
 int TemperatureCompensation::initialize_parameter_handles(ParameterHandles &parameter_handles)
 {
 	char nbuf[16];
@@ -151,6 +151,7 @@ int TemperatureCompensation::initialize_parameter_handles(ParameterHandles &para
 	return PX4_OK;
 }
 
+// parameter_handles을 이용해서 _parameters를 업데이트. accel, gyro, baro 칼리브레이션
 int TemperatureCompensation::parameters_update()
 {
 	int ret = 0;
