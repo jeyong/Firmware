@@ -61,6 +61,7 @@ MissionBlock::MissionBlock(Navigator *navigator) :
 {
 }
 
+// 설정한 mission item의 nav_cmd 및 비행 상태에 따라 true/false 여부 결과. 
 bool
 MissionBlock::is_mission_item_reached()
 {

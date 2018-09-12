@@ -595,7 +595,7 @@ Mission::advance_mission()
 void
 Mission::set_mission_items()
 {
-	// foh에서 사용하는 목적의 변수 초기화
+	// foh(first order)에서 사용하는 목적의 변수 초기화
 	/* reset the altitude foh (first order hold) logic, if altitude foh is enabled (param) a new foh element starts now */
 	_min_current_sp_distance_xy = FLT_MAX;
 
@@ -1392,7 +1392,7 @@ Mission::altitude_sp_foh_update()
 		return;
 	}
 
-	// 이륙, 착륙 mission 동작이 아닌 경우 FOH 사용하지 않음. 지상과의 거리가 가까운 경우 문제 소지. 
+	// 이륙, 착륙 동작이 아닌 경우 FOH 사용하지 않음. 지상과의 거리가 가까운 경우 문제 소지. 
 	/* Don't do FOH for non-missions, landing and takeoff waypoints, the ground may be near
 	 * and the FW controller has a custom landing logic
 	 *
