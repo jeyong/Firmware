@@ -269,10 +269,12 @@ int TemperatureCompensation::parameters_update()
 	return ret;
 }
 
+// thermal offset 계산
 bool TemperatureCompensation::calc_thermal_offsets_1D(SensorCalData1D &coef, float measured_temp, float &offset)
 {
 	bool ret = true;
 
+	// 측정한 온도를 클립해서 칼리브레이션 범위 내에 있도록...
 	// clip the measured temperature to remain within the calibration range
 	float delta_temp;
 
@@ -289,6 +291,7 @@ bool TemperatureCompensation::calc_thermal_offsets_1D(SensorCalData1D &coef, flo
 
 	}
 
+	// offset 계산
 	// calulate the offset
 	float temp_var = delta_temp;
 	offset = coef.x0 + coef.x1 * temp_var;
@@ -309,6 +312,7 @@ bool TemperatureCompensation::calc_thermal_offsets_3D(const SensorCalData3D &coe
 {
 	bool ret = true;
 
+	// 측정한 온도를 칼리브레이션 범위 내에 남아 있도록 
 	// clip the measured temperature to remain within the calibration range
 	float delta_temp;
 
@@ -451,6 +455,7 @@ int TemperatureCompensation::apply_corrections_baro(int topic_instance, float &s
 
 	calc_thermal_offsets_1D(_parameters.baro_cal_data[mapping], temperature, *offsets);
 
+	// 센서 scale factor 구해서 data를 보정
 	// get the sensor scale factors and correct the data
 	*scales = _parameters.baro_cal_data[mapping].scale;
 	sensor_data = (sensor_data - *offsets) * *scales;

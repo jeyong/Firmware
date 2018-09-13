@@ -547,9 +547,7 @@ Sensors::adc_poll()
 				}
 			}
 
-#if 
- > 0
-
+#if BOARD_NUMBER_BRICKS > 0
 			if (_parameters.battery_source == 0) {
 
 				for (int b = 0; b < BOARD_NUMBER_BRICKS; b++) {
@@ -669,6 +667,7 @@ Sensors::run()
 
 		/* this is undesirable but not much we can do - might want to flag unhappy status */
 		if (pret < 0) {
+			// polling이 실패한 이유는 gyro 센서가 아직 유휴하지 않은 경우, 다시 subscribe 시도해보자.
 			/* if the polling operation failed because no gyro sensor is available yet,
 			 * then attempt to subscribe once again
 			 */
@@ -683,9 +682,11 @@ Sensors::run()
 
 		perf_begin(_loop_perf);
 
+		// publication 상태를 변경하기 위해서 vehicle 상태를 검사
 		/* check vehicle status for changes to publication state */
 		vehicle_control_mode_poll();
 
+		// raw 구조체의 timestamp는 gyro_poll()에서 업데이트 (이때 gyro를 필수 센서로 만들어준다.)
 		/* the timestamp of the raw struct is updated by the gyro_poll() method (this makes the gyro
 		 * a mandatory sensor) */
 		const uint64_t airdata_prev_timestamp = airdata.timestamp;
@@ -693,9 +694,11 @@ Sensors::run()
 
 		_voted_sensors_update.sensors_poll(raw, airdata, magnetometer);
 
+		// 배터리 전압 체크
 		/* check battery voltage */
 		adc_poll();
 
+		// 기압차 polling
 		diff_pres_poll(airdata);
 
 		if (raw.timestamp > 0) {
@@ -714,6 +717,7 @@ Sensors::run()
 
 			_voted_sensors_update.check_failover();
 
+			// disarm 상태인 경우 IMU unit들 사이에 최대 차이를 구해서 모든 센서들이 동일하게 측정하는지 체크 
 			/* If the the vehicle is disarmed calculate the length of the maximum difference between
 			 * IMU units as a consistency metric and publish to the sensor preflight topic
 			*/
@@ -726,6 +730,7 @@ Sensors::run()
 			}
 		}
 
+		// arm이 아닌 경우고 0.5초가 지난 경우. 
 		/* keep adding sensors as long as we are not armed,
 		 * when not adding sensors poll for param updates
 		 */

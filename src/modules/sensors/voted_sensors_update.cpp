@@ -102,7 +102,7 @@ int VotedSensorsUpdate::init(sensor_combined_s &raw)
 	return 0;
 }
 
-//4개 센서 topic 초기화
+//4개 센서 topic 초기화 (gyro, mag, accel, baro)
 void VotedSensorsUpdate::initialize_sensors()
 {
 	init_sensor_class(ORB_ID(sensor_gyro), _gyro, GYRO_COUNT_MAX);
