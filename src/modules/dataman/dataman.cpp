@@ -896,12 +896,14 @@ _ram_flash_restart(dm_reset_reason reason)
 }
 #endif
 
+// dataman 파일 open 및 
 static int
 _file_initialize(unsigned max_offset)
 {
 	/* See if the data manage file exists and is a multiple of the sector size */
 	dm_operations_data.file.fd = open(k_data_manager_device_path, O_RDONLY | O_BINARY);
 
+	// 파일 체크 
 	if (dm_operations_data.file.fd >= 0) {
 		// Read the mission state and check the hash
 		struct dataman_compat_s compat_state;
@@ -922,6 +924,7 @@ _file_initialize(unsigned max_offset)
 		}
 	}
 
+	// 파일 open 후 max_offset까지 lseek 해보기(허용 파일 사이즈까지 seek되는지 체크)
 	/* Open or create the data manager file */
 	dm_operations_data.file.fd = open(k_data_manager_device_path, O_RDWR | O_CREAT | O_BINARY, PX4_O_MODE_666);
 
@@ -938,6 +941,7 @@ _file_initialize(unsigned max_offset)
 		return -1;
 	}
 
+	// compat info 쓰기
 	/* Write current compat info */
 	struct dataman_compat_s compat_state;
 	compat_state.key = DM_COMPAT_KEY;
@@ -1274,6 +1278,7 @@ dm_flash_sector_description_set(const dm_sector_descriptor_t *description)
 static int
 task_main(int argc, char *argv[])
 {
+	// disk인지 RAM인지에 따라서 g_dm_ops 설정
 	/* Dataman can use disk or RAM */
 	switch (backend) {
 	case BACKEND_FILE:
@@ -1298,6 +1303,7 @@ task_main(int argc, char *argv[])
 
 	work_q_item_t *work;
 
+	// 전역으로 상요하는 g_key_offsets 초기화
 	/* Initialize global variables */
 	g_key_offsets[0] = 0;
 
@@ -1312,6 +1318,7 @@ task_main(int argc, char *argv[])
 		g_func_counts[i] = 0;
 	}
 
+	// item type lock 초기화. mission state와 fence points에 대해서 lock 지원
 	/* Initialize the item type locks, for now only DM_KEY_MISSION_STATE & DM_KEY_FENCE_POINTS supports locking */
 	px4_sem_init(&g_sys_state_mutex_mission, 1, 1); /* Initially unlocked */
 	px4_sem_init(&g_sys_state_mutex_fence, 1, 1); /* Initially unlocked */
@@ -1395,6 +1402,7 @@ task_main(int argc, char *argv[])
 			g_dm_ops->wait(&g_work_queued_sema);
 		}
 
+		// queue에서 작업 work가 있는 경우 꺼내서 처리
 		/* Empty the work queue */
 		while ((work = dequeue_work_item())) {
 
