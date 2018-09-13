@@ -213,6 +213,7 @@ const size_t k_work_item_allocation_chunk_size = 8;
 /* Usage statistics */
 static unsigned g_func_counts[dm_number_of_funcs];
 
+// item마다 가질 수 있는 최대 index 
 /* table of maximum number of instances for each item type */
 static const unsigned g_per_item_max_index[DM_KEY_NUM_KEYS] = {
 	DM_KEY_SAFE_POINTS_MAX,
@@ -224,8 +225,10 @@ static const unsigned g_per_item_max_index[DM_KEY_NUM_KEYS] = {
 	DM_KEY_COMPAT_MAX
 };
 
+// item마다 헤더로 4byte 사용
 #define DM_SECTOR_HDR_SIZE 4	/* data manager per item header overhead */
 
+// item type 마다 가지는 길이
 /* Table of the len of each item type */
 static constexpr size_t g_per_item_size[DM_KEY_NUM_KEYS] = {
 	sizeof(struct mission_save_point_s) + DM_SECTOR_HDR_SIZE,
@@ -237,6 +240,7 @@ static constexpr size_t g_per_item_size[DM_KEY_NUM_KEYS] = {
 	sizeof(struct dataman_compat_s) + DM_SECTOR_HDR_SIZE
 };
 
+//각 item type의 0번째 index의 offset 값
 /* Table of offset for index 0 of each item type */
 static unsigned int g_key_offsets[DM_KEY_NUM_KEYS];
 
@@ -397,10 +401,12 @@ dequeue_work_item()
 static int
 enqueue_work_item_and_wait_for_result(work_q_item_t *item)
 {
+	// work item을 work queue의 마지막에 추가하기
 	/* put the work item at the end of the work queue */
 	lock_queue(&g_work_q);
 	sq_addlast(&item->link, &(g_work_q.q));
 
+	// queue 사이즈 최대 크기 넘으면 크기 조정 
 	/* Adjust the queue size and potentially the maximum queue size */
 	if (++g_work_q.size > g_work_q.max_size) {
 		g_work_q.max_size = g_work_q.size;
@@ -408,9 +414,11 @@ enqueue_work_item_and_wait_for_result(work_q_item_t *item)
 
 	unlock_queue(&g_work_q);
 
+	// work thread에게 작업이 가능하다고 알림
 	/* tell the work thread that work is available */
 	px4_sem_post(&g_work_queued_sema);
 
+	// 결과 기다림
 	/* wait for the result */
 	px4_sem_wait(&item->wait_sem);
 
@@ -426,21 +434,24 @@ static bool is_running()
 	return dm_operations_data.running;
 }
 
+// 파일 내에서 지정한 item에 대해서 offset 계산하기 
 /* Calculate the offset in file of specific item */
 static int
 calculate_offset(dm_item_t item, unsigned index)
 {
-
+	// item type이 유효한지 체크
 	/* Make sure the item type is valid */
 	if (item >= DM_KEY_NUM_KEYS) {
 		return -1;
 	}
 
+	// 인자로 받은 item type에 대해서 index가 유효한지 검사
 	/* Make sure the index for this item type is valid */
 	if (index >= g_per_item_max_index[item]) {
 		return -1;
 	}
 
+	//item
 	/* Calculate and return the item index based on type and index */
 	return g_key_offsets[item] + (index * g_per_item_size[item]);
 }
@@ -1082,55 +1093,63 @@ _ram_flash_wait(px4_sem_t *sem)
 }
 #endif
 
+//dm에 쓰기
 /** Write to the data manager file */
 __EXPORT ssize_t
 dm_write(dm_item_t item, unsigned index, dm_persitence_t persistence, const void *buf, size_t count)
 {
 	work_q_item_t *work;
 
+	// dm이 동작 중인지 검사
 	/* Make sure data manager has been started and is not shutting down */
 	if (!is_running() || g_task_should_exit) {
 		return -1;
 	}
 
+	// work item 생성하여 write 요청으로 queue에 넣기
 	/* get a work item and queue up a write request */
 	if ((work = create_work_item()) == nullptr) {
 		return -1;
 	}
 
-	work->func = dm_write_func;
+	work->func = dm_write_func; // write 동작
 	work->write_params.item = item;
 	work->write_params.index = index;
 	work->write_params.persistence = persistence;
 	work->write_params.buf = buf;
 	work->write_params.count = count;
 
+	// item을 work queue에 넣고 thread가 완료하기를 기다림
 	/* Enqueue the item on the work queue and wait for the worker thread to complete processing it */
 	return (ssize_t)enqueue_work_item_and_wait_for_result(work);
 }
 
+//dm 파일에서 읽기
 /** Retrieve from the data manager file */
 __EXPORT ssize_t
 dm_read(dm_item_t item, unsigned index, void *buf, size_t count)
 {
 	work_q_item_t *work;
 
+	// dm이 동작 중인지 확인
 	/* Make sure data manager has been started and is not shutting down */
 	if (!is_running() || g_task_should_exit) {
 		return -1;
 	}
 
+	// work item을 생성하고 read 요청으로 queue에 넣기 
 	/* get a work item and queue up a read request */
 	if ((work = create_work_item()) == nullptr) {
 		return -1;
 	}
 
-	work->func = dm_read_func;
+	work->func = dm_read_func; // read 동작
 	work->read_params.item = item;
 	work->read_params.index = index;
 	work->read_params.buf = buf;
 	work->read_params.count = count;
 
+	// item을 work queue에 넣고 thread가 완료하기를 기다림
 	/* Enqueue the item on the work queue and wait for the worker thread to complete processing it */
 	return (ssize_t)enqueue_work_item_and_wait_for_result(work);
 }

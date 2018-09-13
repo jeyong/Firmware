@@ -639,6 +639,7 @@ void VotedSensorsUpdate::accel_poll(struct sensor_combined_s &raw)
 		}
 	}
 
+	// 최선의 센서 찾기
 	// find the best sensor
 	int best_index;
 	_accel.voter.get_best(hrt_absolute_time(), &best_index);
