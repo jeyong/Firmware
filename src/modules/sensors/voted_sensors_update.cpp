@@ -50,6 +50,7 @@
 using namespace sensors;
 using namespace DriverFramework;
 
+// 각 멤버 변수에 대해서 초기화
 VotedSensorsUpdate::VotedSensorsUpdate(const Parameters &parameters, bool hil_enabled)
 	: _parameters(parameters), _hil_enabled(hil_enabled)
 {
@@ -78,9 +79,9 @@ VotedSensorsUpdate::VotedSensorsUpdate(const Parameters &parameters, bool hil_en
 	_corrections.baro_scale_1 = 1.0f;
 	_corrections.baro_scale_2 = 1.0f;
 
-	_baro.voter.set_timeout(300000);
-	_mag.voter.set_timeout(300000);
-	_mag.voter.set_equal_value_threshold(1000);
+	_baro.voter.set_timeout(300000); // 300ms
+	_mag.voter.set_timeout(300000); // 300ms
+	_mag.voter.set_equal_value_threshold(1000); //
 
 	if (_hil_enabled) { // HIL has less accurate timing so increase the timeouts a bit
 		_gyro.voter.set_timeout(500000);

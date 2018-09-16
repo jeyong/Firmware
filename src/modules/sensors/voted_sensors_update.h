@@ -155,10 +155,10 @@ private:
 
 	struct SensorData {
 		SensorData()
-			: last_best_vote(0),
-			  subscription_count(0),
-			  voter(1),
-			  last_failover_count(0)
+			: last_best_vote(0),  // 마지막에 best라고 선출된 것
+			  subscription_count(0), 	// subscription 횟수
+			  voter(1),					// 추천
+			  last_failover_count(0)	// 마지막에 failover된 횟수
 		{
 			for (unsigned i = 0; i < SENSOR_COUNT_MAX; i++) {
 				enabled[i] = true;
@@ -167,14 +167,14 @@ private:
 			}
 		}
 
-		bool enabled[SENSOR_COUNT_MAX];
+		bool enabled[SENSOR_COUNT_MAX];	// 유효한 센서
 
-		int subscription[SENSOR_COUNT_MAX]; /**< raw sensor data subscription */
-		uint8_t priority[SENSOR_COUNT_MAX]; /**< sensor priority */
-		uint8_t last_best_vote; /**< index of the latest best vote */
+		int subscription[SENSOR_COUNT_MAX]; /**< raw sensor data subscription */ // subscribe하는 raw sensor 데이터 
+		uint8_t priority[SENSOR_COUNT_MAX]; /**< sensor priority */              // sensor 우선순위
+		uint8_t last_best_vote; /**< index of the latest best vote */			// 최근 best로 선출된 index
 		int subscription_count;
-		DataValidatorGroup voter;
-		unsigned int last_failover_count;
+		DataValidatorGroup voter;	// best 선출방식
+		unsigned int last_failover_count;    //마지막 장애 횟수
 	};
 
 	void	init_sensor_class(const struct orb_metadata *meta, SensorData &sensor_data, uint8_t sensor_count_max);
