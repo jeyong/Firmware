@@ -80,11 +80,13 @@ public:
 	void rc_parameter_map_poll(ParameterHandles &parameter_handles, bool forced = false);
 
 	/**
+	 * parameter가 변경된 경우 이 method를 호출하면 RC function을 업데이트함.
 	 * update the RC functions. Call this when the parameters change.
 	 */
 	void update_rc_functions();
 
 	/**
+	 * RC 입력 데이터를 모아서 publish
 	 * Gather and publish RC input data.
 	 */
 	void		rc_poll(const ParameterHandles &parameter_handles);
@@ -92,17 +94,20 @@ public:
 private:
 
 	/**
+	 * 특정 RC function에 대해서 유효한 범위의 값을 얻기. 매핑이 안된 경우 NAN을 반환
 	 * Get and limit value for specified RC function. Returns NAN if not mapped.
 	 */
 	float		get_rc_value(uint8_t func, float min_value, float max_value);
 
 	/**
+	 * 지정한 function에 대해서 switch position을 얻기
 	 * Get switch position for specified function.
 	 */
 	switch_pos_t	get_rc_sw3pos_position(uint8_t func, float on_th, bool on_inv, float mid_th, bool mid_inv);
 	switch_pos_t	get_rc_sw2pos_position(uint8_t func, float on_th, bool on_inv);
 
 	/**
+	 * 마지막 업데이트 이후로 기능이 활성화되거나 입력이 변경된 경우, RC 채널로부터 paramter를 업데이트
 	 * Update parameters from RC channels if the functionality is activated and the
 	 * input has changed since the last update
 	 *

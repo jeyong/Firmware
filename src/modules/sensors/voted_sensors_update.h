@@ -84,6 +84,7 @@ public:
 	VotedSensorsUpdate(const Parameters &parameters, bool hil_enabled);
 
 	/**
+	 * subscription을 초기화
 	 * initialize subscriptions etc.
 	 * @return 0 on success, <0 otherwise
 	 */
@@ -110,7 +111,7 @@ public:
 	void parameters_update();
 
 	/**
-	 * 새로운 sensor 데이터 읽기
+	 * accel, gyro, mag, baro의 센서 값을 poll해서 publish하는 핵심 method
 	 * read new sensor data
 	 */
 	void sensors_poll(sensor_combined_s &raw, vehicle_air_data_s &airdata, vehicle_magnetometer_s &magnetometer);
@@ -128,6 +129,7 @@ public:
 	 */
 	void check_failover();
 
+	// gyro의 수(gyro를 subscription하는 수와 동일)
 	int num_gyros() const { return _gyro.subscription_count; }
 	int gyro_fd(int idx) const { return _gyro.subscription[idx]; }
 
@@ -153,6 +155,7 @@ public:
 
 private:
 
+	// 각 센서에 대해서 유효 센서, subscription 수, 우순선위, 최신 best 선정 index, voter, failover에 대한 정보를 가지는 구조체
 	struct SensorData {
 		SensorData()
 			: last_best_vote(0),  // 마지막에 best라고 선출된 것
@@ -259,14 +262,14 @@ private:
 
 	orb_advert_t	_mavlink_log_pub = nullptr;
 
-	sensor_combined_s _last_sensor_data[SENSOR_COUNT_MAX]; /**< latest sensor data from all sensors instances */
-	vehicle_air_data_s _last_airdata[SENSOR_COUNT_MAX]; /**< latest sensor data from all sensors instances */
-	vehicle_magnetometer_s _last_magnetometer[SENSOR_COUNT_MAX]; /**< latest sensor data from all sensors instances */
+	sensor_combined_s _last_sensor_data[SENSOR_COUNT_MAX]; /**< latest sensor data from all sensors instances */ // 가장 최신 센서 데이터
+	vehicle_air_data_s _last_airdata[SENSOR_COUNT_MAX]; /**< latest sensor data from all sensors instances */	// 가장 최신 airdata 데이터
+	vehicle_magnetometer_s _last_magnetometer[SENSOR_COUNT_MAX]; /**< latest sensor data from all sensors instances */	//가장 최신 mag 데이터
 
-	uint64_t _last_accel_timestamp[ACCEL_COUNT_MAX]; /**< latest full timestamp */
+	uint64_t _last_accel_timestamp[ACCEL_COUNT_MAX]; /**< latest full timestamp */ // 최신 accel timestamp
 
-	matrix::Dcmf	_board_rotation;	/**< rotation matrix for the orientation that the board is mounted */
-	matrix::Dcmf	_mag_rotation[MAG_COUNT_MAX];	/**< rotation matrix for the orientation that the external mag0 is mounted */
+	matrix::Dcmf	_board_rotation;	/**< rotation matrix for the orientation that the board is mounted */ // 보드가 장착된 방향에 따른 회전 매트릭스
+	matrix::Dcmf	_mag_rotation[MAG_COUNT_MAX];	/**< rotation matrix for the orientation that the external mag0 is mounted */ // 외부 mag0이 장착된 방향에 따른 회전 매트릭스
 
 	const Parameters &_parameters;
 	const bool _hil_enabled; /**< is hardware-in-the-loop mode enabled? */
@@ -275,21 +278,25 @@ private:
 	float _gyro_diff[3][2];		/**< filtered gyro differences between IMU uinits (rad/s) */
 	float _mag_diff[3][2];		/**< filtered mag differences between sensor instances (Ga) */
 
+	// 센서 열 보상
 	/* sensor thermal compensation */
 	TemperatureCompensation _temperature_compensation;
 	struct sensor_correction_s _corrections; /**< struct containing the sensor corrections to be published to the uORB*/
 	orb_advert_t _sensor_correction_pub = nullptr; /**< handle to the sensor correction uORB topic */
 	bool _corrections_changed = false;
 
+	// 선택된 센서로 publish됨
 	/* sensor selection publication */
 	struct sensor_selection_s _selection = {}; /**< struct containing the sensor selection to be published to the uORB*/
 	orb_advert_t _sensor_selection_pub = nullptr; /**< handle to the sensor selection uORB topic */
-	bool _selection_changed = false; /**< true when a sensor selection has changed and not been published */
+	bool _selection_changed = false; /**< true when a sensor selection has changed and not been published */ // 센서 선택이 바뀐 경우를 나타내는 flag
 
+	// subsystem 정보 publish 
 	/* subsystem info publication */
 	struct subsystem_info_s _info;
 	orb_advert_t _info_pub = nullptr;
 
+	// driver device id로 각 uorb instance를 나타냄
 	uint32_t _accel_device_id[SENSOR_COUNT_MAX] = {}; /**< accel driver device id for each uorb instance */
 	uint32_t _baro_device_id[SENSOR_COUNT_MAX] = {};
 	uint32_t _gyro_device_id[SENSOR_COUNT_MAX] = {};
