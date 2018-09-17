@@ -223,26 +223,30 @@ private:
 
 
 	/**
-
+	센서의 온도 보정을 위해서 필요한 offset을 계산. 5차 함수.
+	측정한 온도가 칼리브레이션 범위 넘어가는 경우, 온도 범위 내에 있도록 낮추고 false를 반환.
+	측정한 온도가 칼르비레이션 범위 내에 있는 경우, true 반환.
 	Calculate the offset required to compensate the sensor for temperature effects using a 5th order method
 	If the measured temperature is outside the calibration range, clip the temperature to remain within the range and return false.
 	If the measured temperature is within the calibration range, return true.
 
 	Arguments:
 
-	coef : reference to struct containing calibration coefficients
-	measured_temp : temperature measured at the sensor (deg C)
-	offset : reference to sensor offset
+	coef : reference to struct containing calibration coefficients // 칼리브레이션 계수
+	measured_temp : temperature measured at the sensor (deg C) //센서에서 측정한 온도
+	offset : reference to sensor offset	//센서 offset
 
 	Returns:
-
+	// 측정한 온도가 보정을 위한 유효 범위 내에 있는 경우 true 반환
 	Boolean true if the measured temperature is inside the valid range for the compensation
 
 	*/
 	bool calc_thermal_offsets_1D(SensorCalData1D &coef, float measured_temp, float &offset);
 
 	/**
-
+	온도 효과에 대해서 센서를 보정하는데 필요한 offset을 계산
+	측정한 온도가 칼리브레이션 범위 밖이면, 온도가 범위 내에 들어가도록 자르고 false를 반환.
+	측정한 온도가 칼리브레이션 범위 내에 들어가면, true 반환.
 	Calculate the offsets required to compensate the sensor for temperature effects
 	If the measured temperature is outside the calibration range, clip the temperature to remain within the range and return false.
 	If the measured temperature is within the calibration range, return true.
@@ -274,7 +278,7 @@ private:
 			for (int i = 0; i < SENSOR_COUNT_MAX; ++i) { last_temperature[i] = -100.0f; }
 		}
 		uint8_t device_mapping[SENSOR_COUNT_MAX]; /// map a topic instance to the parameters index // topic instance와 parameter index 매핑
-		float last_temperature[SENSOR_COUNT_MAX];
+		float last_temperature[SENSOR_COUNT_MAX]; // 최신 온도
 	};
 	PerSensorData _gyro_data;
 	PerSensorData _accel_data;

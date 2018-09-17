@@ -120,6 +120,7 @@ void RCUpdate::update_rc_functions()
 	}
 
 	// RC 로우패스 필터의 sample rate와 cutoff rate를 파라미터에서 읽어서 설정
+	// roll, pitch, yaw, throttle에 대해서 부드럽게 동작하도록 하기 위해서 lowpass filter 먹임
 	/* update the RC low pass filter frequencies */
 	_filter_roll.set_cutoff_frequency(_parameters.rc_flt_smp_rate, _parameters.rc_flt_cutoff);
 	_filter_pitch.set_cutoff_frequency(_parameters.rc_flt_smp_rate, _parameters.rc_flt_cutoff);

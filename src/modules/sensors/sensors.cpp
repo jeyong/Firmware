@@ -379,7 +379,7 @@ Sensors::diff_pres_poll(const vehicle_air_data_s &raw)
 	}
 }
 
-//비행 모드 설정 subscribe하기
+//비행 모드 설정 subscribe하기. arm 상태인지만 체크
 void
 Sensors::vehicle_control_mode_poll()
 {
@@ -694,7 +694,7 @@ Sensors::run()
 
 		perf_begin(_loop_perf);
 
-		// publication 상태를 변경하기 위해서 vehicle 상태를 검사
+		// publication 상태를 변경하기 위해서 vehicle 상태를 검사. arm 여부만 업데이트
 		/* check vehicle status for changes to publication state */
 		vehicle_control_mode_poll();
 

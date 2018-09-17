@@ -1102,13 +1102,13 @@ VotedSensorsUpdate::apply_mag_calibration(DevHandle &h, const struct mag_calibra
 void VotedSensorsUpdate::sensors_poll(sensor_combined_s &raw, vehicle_air_data_s &airdata,
 				      vehicle_magnetometer_s &magnetometer)
 {
-	// accel, gyro, mag, baro의 센서 값을 가져오기
+	// accel, gyro, mag, baro의 센서 값을 업데이트
 	accel_poll(raw);
 	gyro_poll(raw);
 	mag_poll(magnetometer);
 	baro_poll(airdata);
 
-	// correction이 변경된 경우 이를 publish 
+	// correction이 변경된 경우 변경되었다고 publish 하기
 	// publish sensor corrections if necessary
 	if (!_hil_enabled && _corrections_changed) {
 		_corrections.timestamp = hrt_absolute_time();

@@ -52,6 +52,7 @@ int TemperatureCompensation::initialize_parameter_handles(ParameterHandles &para
 	char nbuf[16];
 	int ret = PX4_ERROR;
 
+	// gyro 온도 칼리브레이션 enable 파라미터 읽어오기
 	/* rate gyro calibration parameters */
 	parameter_handles.gyro_tc_enable = param_find("TC_G_ENABLE");
 	int32_t gyro_tc_enabled = 0;
@@ -84,6 +85,7 @@ int TemperatureCompensation::initialize_parameter_handles(ParameterHandles &para
 		}
 	}
 
+	// accel 온도 칼리브레이션 enable 파라미터 읽어오기
 	/* accelerometer calibration parameters */
 	parameter_handles.accel_tc_enable = param_find("TC_A_ENABLE");
 	int32_t accel_tc_enabled = 0;
@@ -116,6 +118,7 @@ int TemperatureCompensation::initialize_parameter_handles(ParameterHandles &para
 		}
 	}
 
+	// baro 온도 칼리브레이션 enable 파라미터 읽어오기
 	/* barometer calibration parameters */
 	parameter_handles.baro_tc_enable = param_find("TC_B_ENABLE");
 	int32_t baro_tc_enabled = 0;
@@ -151,7 +154,7 @@ int TemperatureCompensation::initialize_parameter_handles(ParameterHandles &para
 	return PX4_OK;
 }
 
-// parameter_handles을 이용해서 _parameters를 업데이트. accel, gyro, baro 칼리브레이션
+// parameter_handles을 이용해서 _parameters를 업데이트. accel, gyro, baro 칼리브레이션에 필요한 값을 param에서 읽기
 int TemperatureCompensation::parameters_update()
 {
 	int ret = 0;
@@ -163,6 +166,7 @@ int TemperatureCompensation::parameters_update()
 		return ret;
 	}
 
+	// gyro의 온도 칼리브레이션이 enable 여부 확인
 	/* rate gyro calibration parameters */
 	param_get(parameter_handles.gyro_tc_enable, &(_parameters.gyro_tc_enable));
 
@@ -181,7 +185,7 @@ int TemperatureCompensation::parameters_update()
 					param_get(parameter_handles.gyro_cal_handles[j].scale[i], &(_parameters.gyro_cal_data[j].scale[i]));
 				}
 
-			} else {
+			} else { // gyro 칼리브레이션 ID를 param에서 읽기 실패한 경우, 관련 값을 초기값으로 설정
 				// Set all cal values to zero and scale factor to unity
 				memset(&_parameters.gyro_cal_data[j], 0, sizeof(_parameters.gyro_cal_data[j]));
 
@@ -196,6 +200,7 @@ int TemperatureCompensation::parameters_update()
 		}
 	}
 
+	// accel의 온도 칼리브레이션이 enable 여부 확인
 	/* accelerometer calibration parameters */
 	param_get(parameter_handles.accel_tc_enable, &(_parameters.accel_tc_enable));
 
@@ -214,7 +219,7 @@ int TemperatureCompensation::parameters_update()
 					param_get(parameter_handles.accel_cal_handles[j].scale[i], &(_parameters.accel_cal_data[j].scale[i]));
 				}
 
-			} else {
+			} else { // accel 칼리브레이션 ID를 param에서 읽기 실패한 경우, 관련 값을 초기값으로 설정
 				// Set all cal values to zero and scale factor to unity
 				memset(&_parameters.accel_cal_data[j], 0, sizeof(_parameters.accel_cal_data[j]));
 
@@ -229,6 +234,7 @@ int TemperatureCompensation::parameters_update()
 		}
 	}
 
+	// baro의 온도 칼리브레이션이 enable 여부 확인
 	/* barometer calibration parameters */
 	param_get(parameter_handles.baro_tc_enable, &(_parameters.baro_tc_enable));
 
@@ -246,7 +252,7 @@ int TemperatureCompensation::parameters_update()
 				param_get(parameter_handles.baro_cal_handles[j].x0, &(_parameters.baro_cal_data[j].x0));
 				param_get(parameter_handles.baro_cal_handles[j].scale, &(_parameters.baro_cal_data[j].scale));
 
-			} else {
+			} else { // baro 칼리브레이션 ID를 param에서 읽기 실패한 경우, 관련 값을 초기값으로 설정
 				// Set all cal values to zero and scale factor to unity
 				memset(&_parameters.baro_cal_data[j], 0, sizeof(_parameters.baro_cal_data[j]));
 
@@ -259,6 +265,7 @@ int TemperatureCompensation::parameters_update()
 		}
 	}
 
+	// param으로부터 offset과 scale 변경값으로 업데이트 될 수 있으므로, 이 값이 다음 보정에 사용하기 위해서 아래 data를 reset
 	/* the offsets & scales might have changed, so make sure to report that change later when applying the
 	 * next corrections
 	 */
@@ -269,7 +276,7 @@ int TemperatureCompensation::parameters_update()
 	return ret;
 }
 
-// thermal offset 계산
+// 1차원 온도 offset 계산
 bool TemperatureCompensation::calc_thermal_offsets_1D(SensorCalData1D &coef, float measured_temp, float &offset)
 {
 	bool ret = true;
@@ -278,15 +285,15 @@ bool TemperatureCompensation::calc_thermal_offsets_1D(SensorCalData1D &coef, flo
 	// clip the measured temperature to remain within the calibration range
 	float delta_temp;
 
-	if (measured_temp > coef.max_temp) {
+	if (measured_temp > coef.max_temp) { // 측정한 온도가 coef.max를 넘는 경우
 		delta_temp = coef.max_temp - coef.ref_temp;
 		ret = false;
 
-	} else if (measured_temp < coef.min_temp) {
+	} else if (measured_temp < coef.min_temp) { //측정한 온도가 coef.min보다 작은 경우
 		delta_temp = coef.min_temp - coef.ref_temp;
 		ret = false;
 
-	} else {
+	} else { //정상인 경우
 		delta_temp = measured_temp - coef.ref_temp;
 
 	}
@@ -308,6 +315,7 @@ bool TemperatureCompensation::calc_thermal_offsets_1D(SensorCalData1D &coef, flo
 
 }
 
+//3차원(XYZ) 온도 offset 계산하기
 bool TemperatureCompensation::calc_thermal_offsets_3D(const SensorCalData3D &coef, float measured_temp, float offset[])
 {
 	bool ret = true;
@@ -316,19 +324,20 @@ bool TemperatureCompensation::calc_thermal_offsets_3D(const SensorCalData3D &coe
 	// clip the measured temperature to remain within the calibration range
 	float delta_temp;
 
-	if (measured_temp > coef.max_temp) {
+	if (measured_temp > coef.max_temp) { // 측정한 온도가 coef.max를 넘는 경우
 		delta_temp = coef.max_temp - coef.ref_temp;
 		ret = false;
 
-	} else if (measured_temp < coef.min_temp) {
+	} else if (measured_temp < coef.min_temp) { // 측정한 온도가 coef.min보다 작은 경우
 		delta_temp = coef.min_temp - coef.ref_temp;
 		ret = false;
 
-	} else {
+	} else { // 정상인 경우
 		delta_temp = measured_temp - coef.ref_temp;
 
 	}
 
+	// offset을 계산
 	// calulate the offsets
 	float delta_temp_2 = delta_temp * delta_temp;
 	float delta_temp_3 = delta_temp_2 * delta_temp;
@@ -341,6 +350,7 @@ bool TemperatureCompensation::calc_thermal_offsets_3D(const SensorCalData3D &coe
 
 }
 
+// tc_enalbe인 경우에 한해서 gyro device_id와 topic_instance를 매핑
 int TemperatureCompensation::set_sensor_id_gyro(uint32_t device_id, int topic_instance)
 {
 	if (_parameters.gyro_tc_enable != 1) {
@@ -350,6 +360,7 @@ int TemperatureCompensation::set_sensor_id_gyro(uint32_t device_id, int topic_in
 	return set_sensor_id(device_id, topic_instance, _gyro_data, _parameters.gyro_cal_data, GYRO_COUNT_MAX);
 }
 
+// tc_enalbe인 경우에 한해서 accel device_id와 topic_instance를 매핑
 int TemperatureCompensation::set_sensor_id_accel(uint32_t device_id, int topic_instance)
 {
 	if (_parameters.accel_tc_enable != 1) {
@@ -359,6 +370,7 @@ int TemperatureCompensation::set_sensor_id_accel(uint32_t device_id, int topic_i
 	return set_sensor_id(device_id, topic_instance, _accel_data, _parameters.accel_cal_data, ACCEL_COUNT_MAX);
 }
 
+// tc_enalbe인 경우에 한해서 baro device_id와 topic_instance를 매핑
 int TemperatureCompensation::set_sensor_id_baro(uint32_t device_id, int topic_instance)
 {
 	if (_parameters.baro_tc_enable != 1) {
@@ -391,10 +403,11 @@ int TemperatureCompensation::apply_corrections_gyro(int topic_instance, matrix::
 
 	uint8_t mapping = _gyro_data.device_mapping[topic_instance];
 
-	if (mapping == 255) {
+	if (mapping == 255) { //255인 경우 mapping이 없는 값
 		return -1;
 	}
 
+	// tc offset 계산
 	calc_thermal_offsets_3D(_parameters.gyro_cal_data[mapping], temperature, offsets);
 
 	// get the sensor scale factors and correct the data
@@ -403,6 +416,7 @@ int TemperatureCompensation::apply_corrections_gyro(int topic_instance, matrix::
 		sensor_data(axis_index) = (sensor_data(axis_index) - offsets[axis_index]) * scales[axis_index];
 	}
 
+	// 온도 차이가 1도 이상 나는 경우, 최신 온도 update
 	if (fabsf(temperature - _gyro_data.last_temperature[topic_instance]) > 1.0f) {
 		_gyro_data.last_temperature[topic_instance] = temperature;
 		return 2;
@@ -440,6 +454,7 @@ int TemperatureCompensation::apply_corrections_accel(int topic_instance, matrix:
 	return 1;
 }
 
+// baro의 sensor 데이터 구하기.(offset 계산, 최신 온도 업데이트)
 int TemperatureCompensation::apply_corrections_baro(int topic_instance, float &sensor_data, float temperature,
 		float *offsets, float *scales)
 {
@@ -452,14 +467,15 @@ int TemperatureCompensation::apply_corrections_baro(int topic_instance, float &s
 	if (mapping == 255) {
 		return -1;
 	}
-
+	// tc offset 계산
 	calc_thermal_offsets_1D(_parameters.baro_cal_data[mapping], temperature, *offsets);
 
-	// 센서 scale factor 구해서 data를 보정
+	// offset, scale로 센서 data 계산
 	// get the sensor scale factors and correct the data
 	*scales = _parameters.baro_cal_data[mapping].scale;
 	sensor_data = (sensor_data - *offsets) * *scales;
 
+	// 온도 차이가 1도 이상인 경우 baro 최신 온도를 업데이트
 	if (fabsf(temperature - _baro_data.last_temperature[topic_instance]) > 1.0f) {
 		_baro_data.last_temperature[topic_instance] = temperature;
 		return 2;
@@ -468,11 +484,13 @@ int TemperatureCompensation::apply_corrections_baro(int topic_instance, float &s
 	return 1;
 }
 
+// gyro, accel, baro의 device id 출력
 void TemperatureCompensation::print_status()
 {
 	PX4_INFO("Temperature Compensation:");
 	PX4_INFO(" gyro: enabled: %i", _parameters.gyro_tc_enable);
 
+	//gyro tc가 enable인 경우, device id 출력
 	if (_parameters.gyro_tc_enable == 1) {
 		for (int i = 0; i < GYRO_COUNT_MAX; ++i) {
 			uint8_t mapping = _gyro_data.device_mapping[i];
@@ -485,6 +503,7 @@ void TemperatureCompensation::print_status()
 
 	PX4_INFO(" accel: enabled: %i", _parameters.accel_tc_enable);
 
+	//accel tc가 enable인 경우, device id 출력
 	if (_parameters.accel_tc_enable == 1) {
 		for (int i = 0; i < ACCEL_COUNT_MAX; ++i) {
 			uint8_t mapping = _accel_data.device_mapping[i];
@@ -497,6 +516,7 @@ void TemperatureCompensation::print_status()
 
 	PX4_INFO(" baro: enabled: %i", _parameters.baro_tc_enable);
 
+	//baro tc가 enable인 경우, device id 출력
 	if (_parameters.baro_tc_enable == 1) {
 		for (int i = 0; i < BARO_COUNT_MAX; ++i) {
 			uint8_t mapping = _baro_data.device_mapping[i];
