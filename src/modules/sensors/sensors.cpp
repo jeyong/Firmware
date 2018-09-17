@@ -118,6 +118,7 @@ using namespace sensors;
 
 
 /**
+ * 실제 온도는 baro 센서에서 가져온 값보다 훨씬 낮으므로, 전원이 켜지면 PCB 보드가 열을 받는 것을 고려해서 5도 정도를 빼주는 방식으로 처리.
  * HACK - true temperature is much less than indicated temperature in baro,
  * subtract 5 degrees in an attempt to account for the electrical upheating of the PCB
  */
@@ -187,7 +188,7 @@ private:
 
 	perf_counter_t	_loop_perf;			/**< loop performance counter */
 
-	DataValidator	_airspeed_validator;		/**< data validator to monitor airspeed */
+	DataValidator	_airspeed_validator;		/**< data validator to monitor airspeed */ // airspeed를 모니터할때 data 유효성 검증
 
 #ifdef ADC_AIRSPEED_VOLTAGE_CHANNEL
 	differential_pressure_s	_diff_pres {};
@@ -203,16 +204,19 @@ private:
 
 
 	/**
+	 * parameter를 업데이트
 	 * Update our local parameter cache.
 	 */
 	int		parameters_update();
 
 	/**
+	 * adc관련 초기화 수행
 	 * Do adc-related initialisation.
 	 */
 	int		adc_init();
 
 	/**
+	 * subscribe해서 얻어온 값으로 계산하여 airdata 채우기
 	 * Poll the differential pressure sensor for updated data.
 	 *
 	 * @param raw			Combined sensor data structure into which
@@ -221,16 +225,19 @@ private:
 	void		diff_pres_poll(const vehicle_air_data_s &airdata);
 
 	/**
+	 * vehicle control mode 정보를 subscribe해서 변경사항 검사
 	 * Check for changes in vehicle control mode.
 	 */
 	void		vehicle_control_mode_poll();
 
 	/**
+	 * parameter 변경 사항 검사
 	 * Check for changes in parameters.
 	 */
 	void 		parameter_update_poll(bool forced = false);
 
 	/**
+	 * ADC를 계속 읽어서 suit로 업데이트
 	 * Poll the ADC and update readings to suit.
 	 *
 	 * @param raw			Combined sensor data structure into which
@@ -267,6 +274,7 @@ Sensors::parameters_update()
 		return 0;
 	}
 
+	// parameter를 값을 읽어서 _parameter로 복사
 	/* read the parameter values into _parameters */
 	int ret = update_parameters(_parameter_handles, _parameters);
 
@@ -274,8 +282,8 @@ Sensors::parameters_update()
 		return ret;
 	}
 
-	_rc_update.update_rc_functions();
-	_voted_sensors_update.parameters_update();
+	_rc_update.update_rc_functions(); //parameter가 변경되면 rc function이 변경될 수 있으므로 함께 update
+	_voted_sensors_update.parameters_update(); // parameter가 변경되면 sensor관련 변경될 수 있으므로 함께 update
 
 	return ret;
 }
@@ -315,7 +323,7 @@ Sensors::diff_pres_poll(const vehicle_air_data_s &raw)
 		airspeed_s airspeed;
 		airspeed.timestamp = diff_pres.timestamp;
 
-		// data의 유효성을 검증하기 위한 구조체로 
+		// data의 유효성을 검증하기 위해 validator 사용
 		/* push data into validator */
 		float airspeed_input[3] = { diff_pres.differential_pressure_raw_pa, diff_pres.temperature, 0.0f };
 
@@ -345,6 +353,9 @@ Sensors::diff_pres_poll(const vehicle_air_data_s &raw)
 		}
 
 		// 음수 값이 들어오는 것을 막기 위해서 0 이상 값
+		// indicatored_airspeed = airspeed보상 모델, tube길이, tube반경, 압력필터, baro압력, 온도
+		// true_airspeed = indicated_airspeed, baro압력, 온도
+		// tru_airspeed_unfiltered = 압력차raw, baro압력, 온도
 		/* don't risk to feed negative airspeed into the system */
 		airspeed.indicated_airspeed_m_s = math::max(0.0f,
 						  calc_indicated_airspeed_corrected((enum AIRSPEED_COMPENSATION_MODEL)_parameters.air_cmodel,
@@ -401,17 +412,18 @@ Sensors::parameter_update_poll(bool forced)
 		parameters_update();
 		updateParams();
 
+		// airspeed scale값이 parameter에 있으므로 update한 값을 반영하기 위해서 
 		/* update airspeed scale */
 		int fd = px4_open(AIRSPEED0_DEVICE_PATH, 0);
 
-		// airspeed 센서는 옵션이라 장착된 경우에, 파라미터에 설정된 scale값을 사용
+		// airspeed 센서는 옵션이라 장착된 경우인지 체크 후 파라미터에 설정된 scale값을 사용
 		/* this sensor is optional, abort without error */
 		if (fd >= 0) {
 			struct airspeed_scale airscale = {
 				_parameters.diff_pres_offset_pa,
 				1.0f,
 			};
-
+			// airscale값을 인자로 전달
 			if (OK != px4_ioctl(fd, AIRSPEEDIOCSSCALE, (long unsigned int)&airscale)) {
 				warn("WARNING: failed to set scale / offsets for airspeed sensor");
 			}
@@ -610,13 +622,13 @@ Sensors::run()
 	/*
 	 * do subscriptions
 	 */
-	_diff_pres_sub = orb_subscribe(ORB_ID(differential_pressure));
+	_diff_pres_sub = orb_subscribe(ORB_ID(differential_pressure)); //driver/differentail_pressure
 
-	_vcontrol_mode_sub = orb_subscribe(ORB_ID(vehicle_control_mode));
+	_vcontrol_mode_sub = orb_subscribe(ORB_ID(vehicle_control_mode)); //commander
 
 	_params_sub = orb_subscribe(ORB_ID(parameter_update));
 
-	_actuator_ctrl_0_sub = orb_subscribe(ORB_ID(actuator_controls_0));
+	_actuator_ctrl_0_sub = orb_subscribe(ORB_ID(actuator_controls_0)); //mavlink receiver
 
 	// 초기값 가져오기
 	/* get a set of initial values */
@@ -665,9 +677,9 @@ Sensors::run()
 
 		/* if pret == 0 it timed out - periodic check for should_exit(), etc. */
 
+		// polling이 실패한 이유는 gyro 센서가 아직 유휴하지 않은 경우, 다시 subscribe 시도해보자.
 		/* this is undesirable but not much we can do - might want to flag unhappy status */
 		if (pret < 0) {
-			// polling이 실패한 이유는 gyro 센서가 아직 유휴하지 않은 경우, 다시 subscribe 시도해보자.
 			/* if the polling operation failed because no gyro sensor is available yet,
 			 * then attempt to subscribe once again
 			 */
@@ -698,6 +710,7 @@ Sensors::run()
 		/* check battery voltage */
 		adc_poll();
 
+		// baro 센서로부터 raw 데이터 받아서 airdata 채우기
 		// 기압차 polling
 		diff_pres_poll(airdata);
 

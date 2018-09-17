@@ -559,13 +559,16 @@ void VotedSensorsUpdate::parameters_update()
 
 void VotedSensorsUpdate::accel_poll(struct sensor_combined_s &raw)
 {
+	//offset과 scale을 가지고
 	float *offsets[] = {_corrections.accel_offset_0, _corrections.accel_offset_1, _corrections.accel_offset_2 };
 	float *scales[] = {_corrections.accel_scale_0, _corrections.accel_scale_1, _corrections.accel_scale_2 };
 
+	// accel 관련 subscribe 업데이트 여부 확인
 	for (unsigned uorb_index = 0; uorb_index < _accel.subscription_count; uorb_index++) {
 		bool accel_updated;
 		orb_check(_accel.subscription[uorb_index], &accel_updated);
 
+		// update가 있는 경우
 		if (accel_updated && _accel.enabled[uorb_index]) {
 			struct accel_report accel_report;
 
@@ -575,6 +578,7 @@ void VotedSensorsUpdate::accel_poll(struct sensor_combined_s &raw)
 				continue; //ignore invalid data
 			}
 
+			// 우선순위가 0인 경우 accel의 priority를 업데이트 
 			// First publication with data
 			if (_accel.priority[uorb_index] == 0) {
 				int32_t priority = 0;
@@ -588,12 +592,16 @@ void VotedSensorsUpdate::accel_poll(struct sensor_combined_s &raw)
 
 			if (accel_report.integral_dt != 0) {
 				/*
+				 * 다운샘플링이 선호되기 전에 드라이버에서 통합되는 데이터를 사용하기. 이렇게 해야 aliasing 에러가 줄어든다.
+				 * scale factor 에러와 온도 진도에 따른 offset에 대해서 raw 센서 데이터를 보정.
+				 * 센서 드라이버에서 수행. 입력 데이터의 필터렁이 필요한 경우 센서 드라이버에서 수행되며 다운샘플링 전이 좋다.
 				 * Using data that has been integrated in the driver before downsampling is preferred
 				 * becasue it reduces aliasing errors. Correct the raw sensor data for scale factor errors
 				 * and offsets due to temperature variation. It is assumed that any filtering of input
 				 * data required is performed in the sensor driver, preferably before downsampling.
 				*/
 
+				// 보정을 수행하기 전에 속도 변화량을 가속도로 데이터로 변환 
 				// convert the delta velocities to an equivalent acceleration before application of corrections
 				float dt_inv = 1.e6f / accel_report.integral_dt;
 				accel_data = matrix::Vector3f(accel_report.x_integral * dt_inv,
@@ -602,23 +610,29 @@ void VotedSensorsUpdate::accel_poll(struct sensor_combined_s &raw)
 
 				_last_sensor_data[uorb_index].accelerometer_integral_dt = accel_report.integral_dt;
 
-			} else {
+			} else { // dt가 0 인 경우
+				// 적분대신에 값을 사용(적분이 더 나은 선택)
 				// using the value instead of the integral (the integral is the prefered choice)
 
+				// 온도 효과에 대해서 각 센서를 보정
+				// 온도 필터링 혹은 다운샘플링은 driver 단에서 수행해야만 한다.
 				// Correct each sensor for temperature effects
 				// Filtering and/or downsampling of temperature should be performed in the driver layer
 				accel_data = matrix::Vector3f(accel_report.x, accel_report.y, accel_report.z);
 
+				// 첫번째 입력인 경우 cse를 처리
 				// handle the cse where this is our first output
 				if (_last_accel_timestamp[uorb_index] == 0) {
 					_last_accel_timestamp[uorb_index] = accel_report.timestamp - 1000;
 				}
 
+				// 가속도 데이터 time stamp에서 차이를 이용해서, 대략적인 dt를 계산
 				// approximate the  delta time using the difference in accel data time stamps
 				_last_sensor_data[uorb_index].accelerometer_integral_dt =
 					(accel_report.timestamp - _last_accel_timestamp[uorb_index]);
 			}
 
+			// 온도 보상 처리
 			// handle temperature compensation
 			if (!_hil_enabled) {
 				if (_temperature_compensation.apply_corrections_accel(uorb_index, accel_data, accel_report.temperature,
@@ -627,6 +641,7 @@ void VotedSensorsUpdate::accel_poll(struct sensor_combined_s &raw)
 				}
 			}
 
+			// body 프레임 기준으로 센서에 대해서 회전 보정 측정
 			// rotate corrected measurements from sensor to body frame
 			accel_data = _board_rotation * accel_data;
 
@@ -645,17 +660,19 @@ void VotedSensorsUpdate::accel_poll(struct sensor_combined_s &raw)
 	int best_index;
 	_accel.voter.get_best(hrt_absolute_time(), &best_index);
 
+	// 최선 센서 데이터를 출력 변수에 쓰기
 	// write the best sensor data to the output variables
 	if (best_index >= 0) {
 		raw.accelerometer_integral_dt = _last_sensor_data[best_index].accelerometer_integral_dt;
 		memcpy(&raw.accelerometer_m_s2, &_last_sensor_data[best_index].accelerometer_m_s2, sizeof(raw.accelerometer_m_s2));
 
+		// 투표로 선택된 index가 바뀐 경우, cocrections_changed를 true 
 		if (best_index != _accel.last_best_vote) {
 			_accel.last_best_vote = (uint8_t)best_index;
 			_corrections.selected_accel_instance = (uint8_t)best_index;
 			_corrections_changed = true;
 		}
-
+		// device id가 바뀐 경우 selection_changed를 true
 		if (_selection.accel_device_id != _accel_device_id[best_index]) {
 			_selection_changed = true;
 			_selection.accel_device_id = _accel_device_id[best_index];
@@ -918,10 +935,11 @@ void VotedSensorsUpdate::baro_poll(vehicle_air_data_s &airdata)
 	}
 }
 
+//인자로 받은 센서의, failover count를 검사
 bool VotedSensorsUpdate::check_failover(SensorData &sensor, const char *sensor_name, const uint64_t type)
 {
 	if (sensor.last_failover_count != sensor.voter.failover_count() && !_hil_enabled) {
-
+		// failover flag와 index 살펴보기
 		uint32_t flags = sensor.voter.failover_state();
 		int failover_index = sensor.voter.failover_index();
 
@@ -931,7 +949,7 @@ bool VotedSensorsUpdate::check_failover(SensorData &sensor, const char *sensor_n
 				PX4_INFO("%s sensor switch from #%i", sensor_name, failover_index);
 			}
 
-		} else {
+		} else { //flag가 error 상황 
 			if (failover_index != -1) {
 				mavlink_log_emergency(&_mavlink_log_pub, "%s #%i fail: %s%s%s%s%s!",
 						      sensor_name,
@@ -941,14 +959,15 @@ bool VotedSensorsUpdate::check_failover(SensorData &sensor, const char *sensor_n
 						      ((flags & DataValidator::ERROR_FLAG_TIMEOUT) ? " TIMEOUT" : ""),
 						      ((flags & DataValidator::ERROR_FLAG_HIGH_ERRCOUNT) ? " ERR CNT" : ""),
 						      ((flags & DataValidator::ERROR_FLAG_HIGH_ERRDENSITY) ? " ERR DNST" : ""));
-
+				// fail 센서의 우선순위를 낮추기
 				// reduce priority of failed sensor to the minimum
 				sensor.priority[failover_index] = 1;
 
 				PX4_ERR("Sensor %s #%i failed. Reconfiguring sensor priorities.", sensor_name, failover_index);
-
+				// 유효한 센서의 수
 				int ctr_valid = 0;
 
+				// 우선순위가 최소 1보다 커야 유효한 센서로 인정해서 count 증가
 				for (uint8_t i = 0; i < sensor.subscription_count; i++) {
 					if (sensor.priority[i] > 1) { ctr_valid++; }
 
@@ -956,12 +975,13 @@ bool VotedSensorsUpdate::check_failover(SensorData &sensor, const char *sensor_n
 						 sensor.priority[i]);
 				}
 
+				// 2개 이하인 경우
 				if (ctr_valid < 2) {
-					if (ctr_valid == 0) {
+					if (ctr_valid == 0) { // 유효한 센서가 0개인 경우. primary 센서도 실패 상태!
 						// Zero valid sensors remain! Set even the primary sensor health to false
 						_info.subsystem_type = type;
 
-					} else if (ctr_valid == 1) {
+					} else if (ctr_valid == 1) {	// 1개 센서만 유효한 경우. 2번째 센서를 실패 상태로 설정.
 						// One valid sensor remains, set secondary sensor health to false
 						if (type == subsystem_info_s::SUBSYSTEM_TYPE_GYRO) { _info.subsystem_type = subsystem_info_s::SUBSYSTEM_TYPE_GYRO2; }
 
@@ -969,7 +989,7 @@ bool VotedSensorsUpdate::check_failover(SensorData &sensor, const char *sensor_n
 
 						if (type == subsystem_info_s::SUBSYSTEM_TYPE_MAG) { _info.subsystem_type = subsystem_info_s::SUBSYSTEM_TYPE_MAG2; }
 					}
-
+					// ok 상태를 false로 설정해서 publish한다.
 					_info.timestamp = hrt_absolute_time();
 					_info.present = true;
 					_info.enabled = true;
@@ -1018,6 +1038,7 @@ void VotedSensorsUpdate::init_sensor_class(const struct orb_metadata *meta, Sens
 	sensor_data.subscription_count = group_count;
 }
 
+//gyro, accel, mag, baro, 온도 상태를 출력
 void VotedSensorsUpdate::print_status()
 {
 	PX4_INFO("gyro status:");
@@ -1081,11 +1102,13 @@ VotedSensorsUpdate::apply_mag_calibration(DevHandle &h, const struct mag_calibra
 void VotedSensorsUpdate::sensors_poll(sensor_combined_s &raw, vehicle_air_data_s &airdata,
 				      vehicle_magnetometer_s &magnetometer)
 {
+	// accel, gyro, mag, baro의 센서 값을 가져오기
 	accel_poll(raw);
 	gyro_poll(raw);
 	mag_poll(magnetometer);
 	baro_poll(airdata);
 
+	// correction이 변경된 경우 이를 publish 
 	// publish sensor corrections if necessary
 	if (!_hil_enabled && _corrections_changed) {
 		_corrections.timestamp = hrt_absolute_time();
@@ -1100,6 +1123,7 @@ void VotedSensorsUpdate::sensors_poll(sensor_combined_s &raw, vehicle_air_data_s
 		_corrections_changed = false;
 	}
 
+	// 선택이 바뀐 경우 이를 publish
 	// publish sensor selection if changed
 	if (_selection_changed) {
 		_selection.timestamp = hrt_absolute_time();

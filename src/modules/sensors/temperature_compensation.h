@@ -60,6 +60,7 @@ static_assert(BARO_COUNT_MAX == 3,
 	      "BARO_COUNT_MAX must be 3 (if changed, add/remove TC_* params to match the count)");
 
 /**
+ * 온도보정 class. 센서 데이터에 온도 보정 하기. parameter에서 보정값 가져오기
  ** class TemperatureCompensation
  * Applies temperature compensation to sensor data. Loads the parameters from PX4 param storage.
  */
@@ -67,9 +68,11 @@ class TemperatureCompensation
 {
 public:
 
+	// parameter에서 load하기. 시작할때 호출되도록
 	/** (re)load the parameters. Make sure to call this on startup as well */
 	int parameters_update();
 
+	// device_id와 특정 uORB topic_instance를 매치시켜서 정보를 제공. 
 	/** supply information which device_id matches a specific uORB topic_instance
 	 *  (needed if a system has multiple sensors of the same type)
 	 *  @return index for compensation parameter entry containing matching device ID on success, <0 otherwise */
@@ -79,6 +82,7 @@ public:
 
 
 	/**
+	 * gyro 센서 데이터에 대한 온도 보정 적용
 	 * Apply Thermal corrections to gyro (& other) sensor data.
 	 * @param topic_instance uORB topic instance
 	 * @param sensor_data input sensor data, output sensor data with applied corrections
@@ -102,8 +106,12 @@ public:
 	void print_status();
 private:
 
+	// 단일 축 5차식 온도 보정 알고리즘
 	/* Struct containing parameters used by the single axis 5th order temperature compensation algorithm
 
+	// measured_temp : sensor에서 측정한 온도
+	// raw_value : 보상전에 센서로부터 읽은 값
+	// corrected_value : 에러를 보정한 값
 	Input:
 
 	measured_temp : temperature measured at the sensor (deg C)
@@ -145,14 +153,14 @@ private:
 		param_t max_temp;
 	};
 
-
+	// 3축 3차 온도 보정 알고리즘
 	/* Struct containing parameters used by the 3-axis 3rd order temperature compensation algorithm
 
 	Input:
 
-	measured_temp : temperature measured at the sensor (deg C)
-	raw_value[3] : XYZ readings from the sensor before compensation
-	corrected_value[3] : XYZ readings from the sensor after compensation for errors
+	measured_temp : temperature measured at the sensor (deg C) // 센서에서 측정한 온도 값
+	raw_value[3] : XYZ readings from the sensor before compensation // 보정하기 전에 센서에서 읽은 XYZ값
+	corrected_value[3] : XYZ readings from the sensor after compensation for errors // 보정후 XYZ 값
 
 	Compute for each measurement index:
 
@@ -185,6 +193,7 @@ private:
 		param_t max_temp;
 	};
 
+	// 온도 칼리브레이션 parameter
 	// create a struct containing all thermal calibration parameters
 	struct Parameters {
 		int32_t gyro_tc_enable;
@@ -264,7 +273,7 @@ private:
 		{
 			for (int i = 0; i < SENSOR_COUNT_MAX; ++i) { last_temperature[i] = -100.0f; }
 		}
-		uint8_t device_mapping[SENSOR_COUNT_MAX]; /// map a topic instance to the parameters index
+		uint8_t device_mapping[SENSOR_COUNT_MAX]; /// map a topic instance to the parameters index // topic instance와 parameter index 매핑
 		float last_temperature[SENSOR_COUNT_MAX];
 	};
 	PerSensorData _gyro_data;
