@@ -204,6 +204,7 @@ private:
 		SensorCalData1D baro_cal_data[BARO_COUNT_MAX];
 	};
 
+	// parameter handle로 param 값에 접근하는데 사용
 	// create a struct containing the handles required to access all calibration parameters
 	struct ParameterHandles {
 		param_t gyro_tc_enable;
@@ -216,6 +217,7 @@ private:
 
 
 	/**
+	 * param handle을 초기화. 
 	 * initialize ParameterHandles struct
 	 * @return 0 on succes, <0 on error
 	 */

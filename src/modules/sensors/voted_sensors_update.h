@@ -278,7 +278,7 @@ private:
 	float _gyro_diff[3][2];		/**< filtered gyro differences between IMU uinits (rad/s) */
 	float _mag_diff[3][2];		/**< filtered mag differences between sensor instances (Ga) */
 
-	// 센서 열 보상
+	// 센서 온도 보정
 	/* sensor thermal compensation */
 	TemperatureCompensation _temperature_compensation;
 	struct sensor_correction_s _corrections; /**< struct containing the sensor corrections to be published to the uORB*/

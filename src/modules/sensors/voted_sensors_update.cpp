@@ -1015,6 +1015,7 @@ bool VotedSensorsUpdate::check_failover(SensorData &sensor, const char *sensor_n
 void VotedSensorsUpdate::init_sensor_class(const struct orb_metadata *meta, SensorData &sensor_data,
 		uint8_t sensor_count_max)
 {
+	//해당 orb id로 몇 개 subscription이 있는지를 반환
 	unsigned group_count = orb_group_count(meta);
 
 	if (group_count > sensor_count_max) {
@@ -1024,9 +1025,9 @@ void VotedSensorsUpdate::init_sensor_class(const struct orb_metadata *meta, Sens
 
 	for (unsigned i = 0; i < group_count; i++) {
 		if (sensor_data.subscription[i] < 0) {
-			sensor_data.subscription[i] = orb_subscribe_multi(meta, i);
+			sensor_data.subscription[i] = orb_subscribe_multi(meta, i); //orb id의 i번째 subscribe를 반환
 
-			if (i > 0) {
+			if (i > 0) { // 첫번째 센서는 무조건 존재해야 하므로 다음 센서에 대해서 new validator를 추가
 				/* the first always exists, but for each further sensor, add a new validator */
 				if (!sensor_data.voter.add_new_validator()) {
 					PX4_ERR("failed to add validator for sensor %s %i", meta->o_name, i);
@@ -1158,17 +1159,21 @@ void VotedSensorsUpdate::set_relative_timestamps(sensor_combined_s &raw)
 void
 VotedSensorsUpdate::calc_accel_inconsistency(sensor_preflight_s &preflt)
 {
+	// 축의 차이의 최대 합의 제곱 
 	float accel_diff_sum_max_sq = 0.0f; // the maximum sum of axis differences squared
-	unsigned check_index = 0; // the number of sensors the primary has been checked against
+	unsigned check_index = 0; // the number of sensors the primary has been checked against // primary와 비교해서 체크한 센서들의 수
 
+	// 각 센서 검사
 	// Check each sensor against the primary
 	for (unsigned sensor_index = 0; sensor_index < _accel.subscription_count; sensor_index++) {
 
+		// 현재 검사하는 센서가 primary가 아니라는 것을 확인
 		// check that the sensor we are checking against is not the same as the primary
 		if ((_accel.priority[sensor_index] > 0) && (sensor_index != _accel.last_best_vote)) {
 
 			float accel_diff_sum_sq = 0.0f; // sum of differences squared for a single sensor comparison agains the primary
 
+			// primary 대비 지정한 센서의 accel_diff_sum_sq를 계산
 			// calculate accel_diff_sum_sq for the specified sensor against the primary
 			for (unsigned axis_index = 0; axis_index < 3; axis_index++) {
 				_accel_diff[axis_index][check_index] = 0.95f * _accel_diff[axis_index][check_index] + 0.05f *
@@ -1178,16 +1183,19 @@ VotedSensorsUpdate::calc_accel_inconsistency(sensor_preflight_s &preflt)
 
 			}
 
+			// 가장 큰 합을 저장
 			// capture the largest sum value
 			if (accel_diff_sum_sq > accel_diff_sum_max_sq) {
 				accel_diff_sum_max_sq = accel_diff_sum_sq;
 
 			}
 
+			// 검사하는 index를 증가
 			// increment the check index
 			check_index++;
 		}
 
+		// 검사한 갯수가 최대 값에 도달하면 break
 		// check to see if the maximum number of checks has been reached and break
 		if (check_index >= 2) {
 			break;
@@ -1195,11 +1203,12 @@ VotedSensorsUpdate::calc_accel_inconsistency(sensor_preflight_s &preflt)
 		}
 	}
 
+	// 2개 센서보다 작은 경우 skip
 	// skip check if less than 2 sensors
 	if (check_index < 1) {
 		preflt.accel_inconsistency_m_s_s = 0.0f;
 
-	} else {
+	} else { // 가장 큰 차이값을 저장
 		// get the vector length of the largest difference and write to the combined sensor struct
 		preflt.accel_inconsistency_m_s_s = sqrtf(accel_diff_sum_max_sq);
 	}
