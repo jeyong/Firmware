@@ -622,13 +622,13 @@ Sensors::run()
 	/*
 	 * do subscriptions
 	 */
-	_diff_pres_sub = orb_subscribe(ORB_ID(differential_pressure)); //driver/differentail_pressure
+	_diff_pres_sub = orb_subscribe(ORB_ID(differential_pressure)); // driver/differentail_pressure에서 보냄
 
-	_vcontrol_mode_sub = orb_subscribe(ORB_ID(vehicle_control_mode)); //commander
+	_vcontrol_mode_sub = orb_subscribe(ORB_ID(vehicle_control_mode)); // commander에서 보냄
 
-	_params_sub = orb_subscribe(ORB_ID(parameter_update));
+	_params_sub = orb_subscribe(ORB_ID(parameter_update)); //파라미터 변경이 일어난 경우 발생
 
-	_actuator_ctrl_0_sub = orb_subscribe(ORB_ID(actuator_controls_0)); //mavlink receiver
+	_actuator_ctrl_0_sub = orb_subscribe(ORB_ID(actuator_controls_0)); //mavlink receiver 보냄
 
 	// 초기값 가져오기
 	/* get a set of initial values */
@@ -667,6 +667,7 @@ Sensors::run()
 
 	while (!should_exit()) {
 
+		// 선택된 gyro의 fd
 		/* use the best-voted gyro to pace output */
 		poll_fds.fd = _voted_sensors_update.best_gyro_fd();
 
@@ -680,6 +681,7 @@ Sensors::run()
 		// polling이 실패한 이유는 gyro 센서가 아직 유휴하지 않은 경우, 다시 subscribe 시도해보자.
 		/* this is undesirable but not much we can do - might want to flag unhappy status */
 		if (pret < 0) {
+			// gyro 센서 갯수가 제대로 인식이 안된 경우 센서 초기화를 시도
 			/* if the polling operation failed because no gyro sensor is available yet,
 			 * then attempt to subscribe once again
 			 */
@@ -694,7 +696,7 @@ Sensors::run()
 
 		perf_begin(_loop_perf);
 
-		// publication 상태를 변경하기 위해서 vehicle 상태를 검사. arm 여부만 업데이트
+		// vehicle_control_mode를 subscription하여 armed 상태를 얻어 온다.
 		/* check vehicle status for changes to publication state */
 		vehicle_control_mode_poll();
 
@@ -751,7 +753,7 @@ Sensors::run()
 			_voted_sensors_update.initialize_sensors();
 			last_config_update = hrt_absolute_time();
 
-		} else {
+		} else { //armed 상태 혹은 0.5초 이내인 경우, parameter 업데이트 및 rc parameter 매핑 검사
 
 			/* check parameters for updates */
 			parameter_update_poll();
@@ -760,6 +762,7 @@ Sensors::run()
 			_rc_update.rc_parameter_map_poll(_parameter_handles);
 		}
 
+		// 새로운 rc 입력 데이터를 가져오기
 		/* Look for new r/c input data */
 		_rc_update.rc_poll(_parameter_handles);
 

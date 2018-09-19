@@ -219,12 +219,14 @@ private:
 	void		baro_poll(vehicle_air_data_s &airdata);
 
 	/**
+	 * 센서의 failover 처리 
 	 * Check & handle failover of a sensor
 	 * @return true if a switch occured (could be for a non-critical reason)
 	 */
 	bool check_failover(SensorData &sensor, const char *sensor_name, const uint64_t type);
 
 	/**
+	 * gyro 칼리브레이션 적용
 	 * Apply a gyro calibration.
 	 *
 	 * @param h: reference to the DevHandle in use
@@ -235,6 +237,7 @@ private:
 	bool apply_gyro_calibration(DriverFramework::DevHandle &h, const struct gyro_calibration_s *gcal, const int device_id);
 
 	/**
+	 * accel 칼리브레이션 적용
 	 * Apply a accel calibration.
 	 *
 	 * @param h: reference to the DevHandle in use
@@ -246,6 +249,7 @@ private:
 				     const int device_id);
 
 	/**
+	 * mag 칼리브레이션 적용
 	 * Apply a mag calibration.
 	 *
 	 * @param h: reference to the DevHandle in use
@@ -281,9 +285,10 @@ private:
 	// 센서 온도 보정
 	/* sensor thermal compensation */
 	TemperatureCompensation _temperature_compensation;
+	// 센서 보정에 필요한 정보를 가지는 구조체로 accel, gyro, baro 각각 3개까지 offset 정보, 선택된 센서 index 값을 저장. uORB index와 센서의 parameter index와 매핑 정보
 	struct sensor_correction_s _corrections; /**< struct containing the sensor corrections to be published to the uORB*/
 	orb_advert_t _sensor_correction_pub = nullptr; /**< handle to the sensor correction uORB topic */
-	bool _corrections_changed = false;
+	bool _corrections_changed = false; // best index가 바뀐 경우 나타내는 flag
 
 	// 선택된 센서로 publish됨
 	/* sensor selection publication */

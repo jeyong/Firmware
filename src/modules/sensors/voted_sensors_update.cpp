@@ -95,6 +95,7 @@ int VotedSensorsUpdate::init(sensor_combined_s &raw)
 	raw.accelerometer_timestamp_relative = sensor_combined_s::RELATIVE_TIMESTAMP_INVALID;
 	raw.timestamp = 0;
 
+	//4개 센서 subscribe를 위한 topic 초기화 (gyro, mag, accel, baro)
 	initialize_sensors();
 
 	_corrections_changed = true; //make sure to initially publish the corrections topic
@@ -132,6 +133,7 @@ void VotedSensorsUpdate::deinit()
 	}
 }
 
+//사용하는 param 초기화 (rotation, 온도보정, )
 //parameter update
 void VotedSensorsUpdate::parameters_update()
 {
@@ -155,13 +157,13 @@ void VotedSensorsUpdate::parameters_update()
 	 * IMPORTANT: we assume all sensor drivers are running and published sensor data at this point
 	 */
 
-	// 온도 보상
+	// 온도 보정
 	/* temperature compensation */
 	_temperature_compensation.parameters_update();
 
 	// 여러 gyro 사용하는 경우 해당 gyro sensor마다 topic 만들어 주는데 이를 topic_instance라고 부른다.
 	// gyro.subscription_count가 유효한 gyro의 수. 
-	// 수신한 gyro topic에서 device_id로 온도 보상을 수행. 결과가 0이며 device ID 찾기 실패한 것. 
+	// 수신한 gyro topic에서 device_id로 온도 보상을 수행. 결과가 0이며 device ID 찾기 실패한 것. (device id에 따른 topic_instance 매칭 확인)
 	// correction에는 accel, gyro, baro의 scale, offset, 선택된 센서의 instance를 조장.
 	// gyro_mapping[instance] = 온도 보상을 채움.  
 	/* gyro */
@@ -266,6 +268,7 @@ void VotedSensorsUpdate::parameters_update()
 		uint32_t driver_device_id = h.ioctl(DEVIOCGDEVICEID, 0);
 		bool config_ok = false;
 
+		// driver 레벨에서 적용한 param에 저장된 칼리브레이션을 가져오기 (device id와 enabled 정보 활용)
 		/* run through all stored calibrations that are applied at the driver level*/
 		for (unsigned i = 0; i < GYRO_COUNT_MAX; i++) {
 			/* initially status is ok per config */
@@ -289,6 +292,7 @@ void VotedSensorsUpdate::parameters_update()
 				gyro_cal_found_count++;
 			}
 
+			// 해당 device에 대한 칼리브레이션이 있으면 이를 적용
 			/* if the calibration is for this device, apply it */
 			if (device_id == driver_device_id) {
 				struct gyro_calibration_s gscale = {};
@@ -305,10 +309,10 @@ void VotedSensorsUpdate::parameters_update()
 				(void)sprintf(str, "CAL_GYRO%u_ZSCALE", i);
 				failed = failed || (OK != param_get(param_find(str), &gscale.z_scale));
 
-				if (failed) {
+				if (failed) { // 해당 device id에 대한 칼리브레이션 정보를 param에서 찾지 못하는 경우
 					PX4_ERR(CAL_ERROR_APPLY_CAL_MSG, "gyro", i);
 
-				} else {
+				} else {	// 칼리브레이션 정보를 정상적으로 가져온 경우 이를 적용하여 칼리브레이션 적용
 					/* apply new scaling and offsets */
 					config_ok = apply_gyro_calibration(h, &gscale, device_id);
 
@@ -326,10 +330,12 @@ void VotedSensorsUpdate::parameters_update()
 		}
 	}
 
+	// 칼리브레이션보다 gyro가 적은 경우 보드 칼리브레이션을 리셋하고 초기 
 	// There are less gyros than calibrations
 	// reset the board calibration and fail the initial load
 	if (gyro_count < gyro_cal_found_count) {
 
+		// 해당 gyro 칼리브레이션 param 값을 0으로 리셋
 		// run through all stored calibrations and reset them
 		for (unsigned i = 0; i < GYRO_COUNT_MAX; i++) {
 
@@ -342,6 +348,7 @@ void VotedSensorsUpdate::parameters_update()
 	/* run through all accel sensors */
 	for (unsigned driver_index = 0; driver_index < ACCEL_COUNT_MAX; driver_index++) {
 
+		// "/dev/accel" + "x" 형태로 path가 설정되며 x가 driver_index가 됨
 		(void)sprintf(str, "%s%u", ACCEL_BASE_DEVICE_PATH, driver_index);
 
 		DevHandle h;
@@ -360,11 +367,11 @@ void VotedSensorsUpdate::parameters_update()
 			failed = false;
 
 			(void)sprintf(str, "CAL_ACC%u_ID", i);
-			int32_t device_id;
+			int32_t device_id; // "CAL_ACCx_ID"에 해당하는 device_id를 param에서 가져오기
 			failed = failed || (OK != param_get(param_find(str), &device_id));
 
 			(void)sprintf(str, "CAL_ACC%u_EN", i);
-			int32_t device_enabled = 1;
+			int32_t device_enabled = 1; // "CAL_ACCx_EN"에 해당하는 device_enabled를 param에서 가져오기
 			failed = failed || (OK != param_get(param_find(str), &device_enabled));
 
 			_accel.enabled[i] = (device_enabled == 1);
@@ -372,11 +379,12 @@ void VotedSensorsUpdate::parameters_update()
 			if (failed) {
 				continue;
 			}
-
+			// 유효한 driver를 가져온 경우 1 증가 시킴
 			if (driver_index == 0 && device_id > 0) {
 				accel_cal_found_count++;
 			}
 
+			// device_id가 유효한 경우 param에 있는 scale 및 offset 값을 가져와서 accel의 칼리브레이션에 적용
 			/* if the calibration is for this device, apply it */
 			if (device_id == driver_device_id) {
 				struct accel_calibration_s ascale = {};
@@ -396,7 +404,7 @@ void VotedSensorsUpdate::parameters_update()
 				if (failed) {
 					PX4_ERR(CAL_ERROR_APPLY_CAL_MSG, "accel", i);
 
-				} else {
+				} else { // scale과 offset 값을 칼리브레이션에 적용
 					/* apply new scaling and offsets */
 					config_ok = apply_accel_calibration(h, &ascale, device_id);
 
@@ -409,15 +417,18 @@ void VotedSensorsUpdate::parameters_update()
 			}
 		}
 
+		// 칼리브레이션에 적용이 정상적으로 된 횟수
 		if (config_ok) {
 			accel_count++;
 		}
 	}
 
+	// 칼리브레이션 성공과 driver_id를 성공적으로 얻은 회수가 다른 경우, board 칼리브레이션을 리셋하고 초기 load 실패
 	// There are less accels than calibrations
 	// reset the board calibration and fail the initial load
 	if (accel_count < accel_cal_found_count) {
 
+		// 칼리브레이션 정보 0으로 설정
 		// run through all stored calibrations and reset them
 		for (unsigned i = 0; i < ACCEL_COUNT_MAX; i++) {
 
@@ -427,6 +438,7 @@ void VotedSensorsUpdate::parameters_update()
 		}
 	}
 
+	// mag 센서 처리. _mag_device_id에 device id를 저장하기 위해서, uorb topic을 통해서 id를 얻는다.
 	/* run through all mag sensors
 	 * Because we store the device id in _mag_device_id, we need to get the id via uorb topic since
 	 * the DevHandle method does not work on POSIX.
@@ -449,27 +461,30 @@ void VotedSensorsUpdate::parameters_update()
 
 		for (unsigned driver_index = 0; driver_index < MAG_COUNT_MAX; ++driver_index) {
 
+			// "/dev/mag" + "x" 형태의 드라이버 path 문자열 생성
 			(void)sprintf(str, "%s%u", MAG_BASE_DEVICE_PATH, driver_index);
 
 			DevMgr::getHandle(str, h);
 
-			if (!h.isValid()) {
+			if (!h.isValid()) { // 해당 driver가 실행 중인 아닌 경우
 				/* the driver is not running, continue with the next */
 				continue;
 			}
 
 			int driver_device_id = h.ioctl(DEVIOCGDEVICEID, 0);
 
+			// 해당 device id를 찾은 경우 
 			if (driver_device_id == topic_device_id) {
 				break; // we found the matching driver
 
-			} else {
+			} else { // 매칭이 안된 경우 release하고 다음 mag driver에 대해서 수행
 				DevMgr::releaseHandle(h);
 			}
 		}
 
 		bool config_ok = false;
 
+		// param에 저장된 칼리브레이션 가져오기
 		/* run through all stored calibrations */
 		for (unsigned i = 0; i < MAG_COUNT_MAX; i++) {
 			/* initially status is ok per config */
@@ -489,6 +504,7 @@ void VotedSensorsUpdate::parameters_update()
 				continue;
 			}
 
+			// 해당 device_id를 확인 후, scale 및 offset을 param에서 가져와서 칼리브레이션에 적용
 			/* if the calibration is for this device, apply it */
 			if (device_id == _mag_device_id[topic_instance]) {
 				struct mag_calibration_s mscale = {};
@@ -507,19 +523,21 @@ void VotedSensorsUpdate::parameters_update()
 
 				(void)sprintf(str, "CAL_MAG%u_ROT", i);
 
+				// mag 센서의 rotation 정보를 param에서 가져와서 
 				int32_t mag_rot;
 				param_get(param_find(str), &mag_rot);
 
-				if (is_external) {
+				if (is_external) { // 외부에 있는 센서인 경우
 
+					// 해당 mag 센서가 내부로 설정되어 있는 경우 처리
 					/* check if this mag is still set as internal, otherwise leave untouched */
-					if (mag_rot < 0) {
+					if (mag_rot < 0) { // mag가 내부로 표시된 경우, rotation 없이 external로 변경
 						/* it was marked as internal, change to external with no rotation */
 						mag_rot = 0;
 						param_set_no_notification(param_find(str), &mag_rot);
 					}
 
-				} else {
+				} else { // 내부에 있는 경우, mag_rot을 내부로 있는 것으로 리셋해주기
 					/* mag is internal - reset param to -1 to indicate internal mag */
 					if (mag_rot != MAG_ROT_VAL_INTERNAL) {
 						mag_rot = MAG_ROT_VAL_INTERNAL;
@@ -527,12 +545,13 @@ void VotedSensorsUpdate::parameters_update()
 					}
 				}
 
+				// mag rotation 적용하기
 				/* now get the mag rotation */
-				if (mag_rot >= 0) {
+				if (mag_rot >= 0) { // 외부로 설정
 					// Set external magnetometers to use the parameter value
 					_mag_rotation[topic_instance] = get_rot_matrix((enum Rotation)mag_rot);
 
-				} else {
+				} else { // board rotation을 사용해서 내부 mag를 설정
 					// Set internal magnetometers to use the board rotation
 					_mag_rotation[topic_instance] = _board_rotation;
 				}
@@ -540,7 +559,7 @@ void VotedSensorsUpdate::parameters_update()
 				if (failed) {
 					PX4_ERR(CAL_ERROR_APPLY_CAL_MSG, "mag", i);
 
-				} else {
+				} else { // offset과 scale을 정상적으로 가져온 경우 칼리브레이션에 적용
 
 					/* apply new scaling and offsets */
 					config_ok = apply_mag_calibration(h, &mscale, device_id);
@@ -680,6 +699,8 @@ void VotedSensorsUpdate::accel_poll(struct sensor_combined_s &raw)
 	}
 }
 
+// 가장 적합한 gyro 정보를 업데이트해서 결국 publish하기 위함
+// 인자로 받은 raw에 best gyro로부터  timestamp, dt, rad/s 를 넣는 것이 목적
 void VotedSensorsUpdate::gyro_poll(struct sensor_combined_s &raw)
 {
 	float *offsets[] = {_corrections.gyro_offset_0, _corrections.gyro_offset_1, _corrections.gyro_offset_2 };
@@ -689,6 +710,7 @@ void VotedSensorsUpdate::gyro_poll(struct sensor_combined_s &raw)
 		bool gyro_updated;
 		orb_check(_gyro.subscription[uorb_index], &gyro_updated);
 
+		// subscribe 업데이트가 있고, enable 상태인 경우
 		if (gyro_updated && _gyro.enabled[uorb_index]) {
 			struct gyro_report gyro_report;
 
@@ -701,7 +723,7 @@ void VotedSensorsUpdate::gyro_poll(struct sensor_combined_s &raw)
 			// First publication with data
 			if (_gyro.priority[uorb_index] == 0) {
 				int32_t priority = 0;
-				orb_priority(_gyro.subscription[uorb_index], &priority);
+				orb_priority(_gyro.subscription[uorb_index], &priority); // priority 값을 가져와서 _gyro에 넣기
 				_gyro.priority[uorb_index] = (uint8_t)priority;
 			}
 
@@ -709,7 +731,7 @@ void VotedSensorsUpdate::gyro_poll(struct sensor_combined_s &raw)
 
 			matrix::Vector3f gyro_rate;
 
-			if (gyro_report.integral_dt != 0) {
+			if (gyro_report.integral_dt != 0) { //dt가 0이 아닌 경우
 				/*
 				 * Using data that has been integrated in the driver before downsampling is preferred
 				 * becasue it reduces aliasing errors. Correct the raw sensor data for scale factor errors
@@ -725,7 +747,7 @@ void VotedSensorsUpdate::gyro_poll(struct sensor_combined_s &raw)
 
 				_last_sensor_data[uorb_index].gyro_integral_dt = gyro_report.integral_dt;
 
-			} else {
+			} else { // dt가 0인 경우
 				//using the value instead of the integral (the integral is the prefered choice)
 
 				// Correct each sensor for temperature effects
@@ -742,6 +764,7 @@ void VotedSensorsUpdate::gyro_poll(struct sensor_combined_s &raw)
 					(gyro_report.timestamp - _last_sensor_data[uorb_index].timestamp);
 			}
 
+			// 온도 보정을 위해 offset, scale 적용
 			// handle temperature compensation
 			if (!_hil_enabled) {
 				if (_temperature_compensation.apply_corrections_gyro(uorb_index, gyro_rate, gyro_report.temperature,
@@ -750,19 +773,23 @@ void VotedSensorsUpdate::gyro_poll(struct sensor_combined_s &raw)
 				}
 			}
 
+			// board rotation을 고려한 gyro_rate 구하기
 			// rotate corrected measurements from sensor to body frame
 			gyro_rate = _board_rotation * gyro_rate;
 
+			// X, Y, Z 축에 대한 gyro_rate 적용
 			_last_sensor_data[uorb_index].gyro_rad[0] = gyro_rate(0);
 			_last_sensor_data[uorb_index].gyro_rad[1] = gyro_rate(1);
 			_last_sensor_data[uorb_index].gyro_rad[2] = gyro_rate(2);
 
 			_last_sensor_data[uorb_index].timestamp = gyro_report.timestamp;
+			// gyro 센서중에 최선의 것을 선택하기 우해 voter에 추가
 			_gyro.voter.put(uorb_index, gyro_report.timestamp, _last_sensor_data[uorb_index].gyro_rad,
 					gyro_report.error_count, _gyro.priority[uorb_index]);
 		}
 	}
 
+	// 가장 적합한 센서 찾기
 	// find the best sensor
 	int best_index;
 	_gyro.voter.get_best(hrt_absolute_time(), &best_index);
@@ -1012,6 +1039,7 @@ bool VotedSensorsUpdate::check_failover(SensorData &sensor, const char *sensor_n
 	return false;
 }
 
+// meta로부터 gyro, accel, baro인지 확인하여 해당 센서들에 대한 subscription을 가져온다. 센서가 여러 개인 경우 voter에 validator 추가.
 void VotedSensorsUpdate::init_sensor_class(const struct orb_metadata *meta, SensorData &sensor_data,
 		uint8_t sensor_count_max)
 {
@@ -1214,19 +1242,24 @@ VotedSensorsUpdate::calc_accel_inconsistency(sensor_preflight_s &preflt)
 	}
 }
 
+//gyro inconsistency 계산
 void VotedSensorsUpdate::calc_gyro_inconsistency(sensor_preflight_s &preflt)
 {
+	// 축에 대한 차이 제곱의 최대 합, primary 센서와 비교할 센서의 수
 	float gyro_diff_sum_max_sq = 0.0f; // the maximum sum of axis differences squared
 	unsigned check_index = 0; // the number of sensors the primary has been checked against
 
+	// primary 대비 각 센서에 대해서 검사
 	// Check each sensor against the primary
 	for (unsigned sensor_index = 0; sensor_index < _gyro.subscription_count; sensor_index++) {
 
+		// 검사할 센서의 sensor_index가 primary가 아닌 경우에 대해서 수행
 		// check that the sensor we are checking against is not the same as the primary
 		if ((_gyro.priority[sensor_index] > 0) && (sensor_index != _gyro.last_best_vote)) {
-
+			// 차이의 제곱의 합
 			float gyro_diff_sum_sq = 0.0f; // sum of differences squared for a single sensor comparison against the primary
 
+			// 지정한 센서와 primary 센서의 gyro_diff_sum_sq를 계산 (3개 축에 대해서)
 			// calculate gyro_diff_sum_sq for the specified sensor against the primary
 			for (unsigned axis_index = 0; axis_index < 3; axis_index++) {
 				_gyro_diff[axis_index][check_index] = 0.95f * _gyro_diff[axis_index][check_index] + 0.05f *
@@ -1236,16 +1269,17 @@ void VotedSensorsUpdate::calc_gyro_inconsistency(sensor_preflight_s &preflt)
 
 			}
 
-			// capture the largest sum value
+			// capture the largest sum value // sum이 가장 큰 값을 저장
 			if (gyro_diff_sum_sq > gyro_diff_sum_max_sq) {
 				gyro_diff_sum_max_sq = gyro_diff_sum_sq;
 
 			}
 
-			// increment the check index
+			// increment the check index // 검사 index 증가
 			check_index++;
 		}
 
+		// 최대 검사 index에 도달했는지 체크
 		// check to see if the maximum number of checks has been reached and break
 		if (check_index >= 2) {
 			break;
@@ -1253,11 +1287,12 @@ void VotedSensorsUpdate::calc_gyro_inconsistency(sensor_preflight_s &preflt)
 		}
 	}
 
+	// primary 밖에 없었던 경우에는 0으로 설정
 	// skip check if less than 2 sensors
 	if (check_index < 1) {
 		preflt.gyro_inconsistency_rad_s = 0.0f;
 
-	} else {
+	} else { // preflt에 추가하여 publish 하기
 		// get the vector length of the largest difference and write to the combined sensor struct
 		preflt.gyro_inconsistency_rad_s = sqrtf(gyro_diff_sum_max_sq);
 	}
