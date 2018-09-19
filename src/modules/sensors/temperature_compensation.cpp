@@ -315,7 +315,7 @@ bool TemperatureCompensation::calc_thermal_offsets_1D(SensorCalData1D &coef, flo
 
 }
 
-//3차원(XYZ) 온도 offset 계산하기
+//3차원(XYZ) 온도 offset 계산하기 (상관계수, 측정한 온도, offset인 인자로 사용)
 bool TemperatureCompensation::calc_thermal_offsets_3D(const SensorCalData3D &coef, float measured_temp, float offset[])
 {
 	bool ret = true;
@@ -380,6 +380,7 @@ int TemperatureCompensation::set_sensor_id_baro(uint32_t device_id, int topic_in
 	return set_sensor_id(device_id, topic_instance, _baro_data, _parameters.baro_cal_data, BARO_COUNT_MAX);
 }
 
+// 센서 device id로 해당 센서에 대한 칼리브레이션 정보를 가지고 있는 i 인덱스를 sensor_data에 설정하도록. 
 template<typename T>
 int TemperatureCompensation::set_sensor_id(uint32_t device_id, int topic_instance, PerSensorData &sensor_data,
 		const T *sensor_cal_data, uint8_t sensor_count_max)
@@ -410,6 +411,7 @@ int TemperatureCompensation::apply_corrections_gyro(int topic_instance, matrix::
 	// tc offset 계산
 	calc_thermal_offsets_3D(_parameters.gyro_cal_data[mapping], temperature, offsets);
 
+	// offset과 scales로 센서 data 계산
 	// get the sensor scale factors and correct the data
 	for (unsigned axis_index = 0; axis_index < 3; axis_index++) {
 		scales[axis_index] = _parameters.gyro_cal_data[mapping].scale[axis_index];
@@ -428,24 +430,29 @@ int TemperatureCompensation::apply_corrections_gyro(int topic_instance, matrix::
 int TemperatureCompensation::apply_corrections_accel(int topic_instance, matrix::Vector3f &sensor_data,
 		float temperature, float *offsets, float *scales)
 {
+	// 열보정 enable 되어 있지 않으면 return
 	if (_parameters.accel_tc_enable != 1) {
 		return 0;
 	}
 
+	// topic에 따른 param에서 해당 index 가져오기
 	uint8_t mapping = _accel_data.device_mapping[topic_instance];
 
 	if (mapping == 255) {
 		return -1;
 	}
 
+	// tc offset 계산
 	calc_thermal_offsets_3D(_parameters.accel_cal_data[mapping], temperature, offsets);
 
+	// offset과 scales로 센서 data 계산
 	// get the sensor scale factors and correct the data
 	for (unsigned axis_index = 0; axis_index < 3; axis_index++) {
 		scales[axis_index] = _parameters.accel_cal_data[mapping].scale[axis_index];
 		sensor_data(axis_index) = (sensor_data(axis_index) - offsets[axis_index]) * scales[axis_index];
 	}
 
+	// 온도 차이가 1도 이상인 경우 baro 최신 온도를 업데이트. 
 	if (fabsf(temperature - _accel_data.last_temperature[topic_instance]) > 1.0f) {
 		_accel_data.last_temperature[topic_instance] = temperature;
 		return 2;
@@ -458,15 +465,18 @@ int TemperatureCompensation::apply_corrections_accel(int topic_instance, matrix:
 int TemperatureCompensation::apply_corrections_baro(int topic_instance, float &sensor_data, float temperature,
 		float *offsets, float *scales)
 {
+	// 열보정 enable 되어 있지 않으면 return
 	if (_parameters.baro_tc_enable != 1) {
 		return 0;
 	}
 
+	// topic에 따른 param에서 해당 index 가져오기
 	uint8_t mapping = _baro_data.device_mapping[topic_instance];
 
 	if (mapping == 255) {
 		return -1;
 	}
+
 	// tc offset 계산
 	calc_thermal_offsets_1D(_parameters.baro_cal_data[mapping], temperature, *offsets);
 
@@ -475,7 +485,7 @@ int TemperatureCompensation::apply_corrections_baro(int topic_instance, float &s
 	*scales = _parameters.baro_cal_data[mapping].scale;
 	sensor_data = (sensor_data - *offsets) * *scales;
 
-	// 온도 차이가 1도 이상인 경우 baro 최신 온도를 업데이트
+	// 온도 차이가 1도 이상인 경우 baro 최신 온도를 업데이트. 
 	if (fabsf(temperature - _baro_data.last_temperature[topic_instance]) > 1.0f) {
 		_baro_data.last_temperature[topic_instance] = temperature;
 		return 2;

@@ -83,6 +83,7 @@ public:
 
 	/**
 	 * gyro 센서 데이터에 대한 온도 보정 적용
+	 * 리턴값 : error(-1), 변경 없음(0), 보정이 적용되었지만 offset 및 scale 변경 없음(1), 보정, offset 및 scale 변경됨(2)
 	 * Apply Thermal corrections to gyro (& other) sensor data.
 	 * @param topic_instance uORB topic instance
 	 * @param sensor_data input sensor data, output sensor data with applied corrections
@@ -255,12 +256,12 @@ private:
 
 	Arguments:
 
-	coef : reference to struct containing calibration coefficients
-	measured_temp : temperature measured at the sensor (deg C)
-	offset : reference to sensor offset - array of 3
+	coef : reference to struct containing calibration coefficients // 칼리브레이션 계수
+	measured_temp : temperature measured at the sensor (deg C) //센서에서 측정한 온도
+	offset : reference to sensor offset - array of 3 //센서 offset
 
 	Returns:
-
+	// 측정한 온도가 보정을 위한 유효 범위 내에 있는 경우 true 반환
 	Boolean true if the measured temperature is inside the valid range for the compensation
 
 	*/

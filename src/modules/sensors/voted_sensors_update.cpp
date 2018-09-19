@@ -813,12 +813,15 @@ void VotedSensorsUpdate::gyro_poll(struct sensor_combined_s &raw)
 	}
 }
 
+// 가장 적합한 mag 정보를 업데이트해서 결국 publish하기 위함
+// 인자로 받은 magnetometer에 best baro 값으로 설정
 void VotedSensorsUpdate::mag_poll(vehicle_magnetometer_s &magnetometer)
 {
 	for (unsigned uorb_index = 0; uorb_index < _mag.subscription_count; uorb_index++) {
 		bool mag_updated;
 		orb_check(_mag.subscription[uorb_index], &mag_updated);
 
+		// mag 정보 업데이트가 있는 경우
 		if (mag_updated && _mag.enabled[uorb_index]) {
 			struct mag_report mag_report;
 
