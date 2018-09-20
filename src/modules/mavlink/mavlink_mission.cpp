@@ -907,7 +907,7 @@ MavlinkMissionManager::handle_mission_count(const mavlink_message_t *msg)
 			_transfer_partner_sysid = msg->sysid;
 			_transfer_partner_compid = msg->compid;
 			_transfer_count = wpc.count;
-			_transfer_dataman_id = (_dataman_id == DM_KEY_WAYPOINTS_OFFBOARD_0 ? DM_KEY_WAYPOINTS_OFFBOARD_1 :
+			_transfer_dataman_id = (_dataman_id == DM_KEY_WAYPOINTS_OFFBOARD_0 ? DM_KEY_WAYPOINTS_OFFBOARD_1 : // mavlink 전송을 위해서 dataman_id와 항상 다른 값으로 설정
 						DM_KEY_WAYPOINTS_OFFBOARD_0);	// use inactive storage for transmission
 			_transfer_current_seq = -1;
 
@@ -1074,7 +1074,7 @@ MavlinkMissionManager::handle_mission_item_both(const mavlink_message_t *msg)
 				    mission_item.nav_cmd == MAV_CMD_NAV_RALLY_POINT) {
 					check_failed = true;
 
-				} else {
+				} else { // mission을 받아서 transfer_datamain_id로 저장
 					dm_item_t dm_item = _transfer_dataman_id;
 
 					write_failed = dm_write(dm_item, wp.seq, DM_PERSIST_POWER_ON_RESET, &mission_item,
@@ -1160,7 +1160,7 @@ MavlinkMissionManager::handle_mission_item_both(const mavlink_message_t *msg)
 
 		_transfer_seq = wp.seq + 1;
 
-		if (_transfer_seq == _transfer_count) {
+		if (_transfer_seq == _transfer_count) { // mavlink로 모든 미션을 받으면 
 			/* got all new mission items successfully */
 			PX4_DEBUG("WPM: MISSION_ITEM got all %u items, current_seq=%u, changing state to MAVLINK_WPM_STATE_IDLE",
 				  _transfer_count, _transfer_current_seq);
@@ -1168,7 +1168,7 @@ MavlinkMissionManager::handle_mission_item_both(const mavlink_message_t *msg)
 			ret = 0;
 
 			switch (_mission_type) {
-			case MAV_MISSION_TYPE_MISSION:
+			case MAV_MISSION_TYPE_MISSION: // mission을 저장을 마친 경우 transfer_datamain_id가 active mission storage id가 된다.
 				ret = update_active_mission(_transfer_dataman_id, _transfer_count, _transfer_current_seq);
 				break;
 
