@@ -292,7 +292,7 @@ Sensors::parameters_update()
 int
 Sensors::adc_init()
 {
-	DevMgr::getHandle(ADC0_DEVICE_PATH, _h_adc);
+	DevMgr::getHandle(ADC0_DEVICE_PATH, _h_adc); // "/dev/adc0" path에 대한 handle
 
 	if (!_h_adc.isValid()) {
 		PX4_ERR("no ADC found: %s (%d)", ADC0_DEVICE_PATH, _h_adc.getError());
@@ -706,6 +706,7 @@ Sensors::run()
 		const uint64_t airdata_prev_timestamp = airdata.timestamp;
 		const uint64_t magnetometer_prev_timestamp = magnetometer.timestamp;
 
+		// 실제로 센서로부터 정보를 업데이트하는 핵심 부분!
 		_voted_sensors_update.sensors_poll(raw, airdata, magnetometer);
 
 		// 배터리 전압 체크
