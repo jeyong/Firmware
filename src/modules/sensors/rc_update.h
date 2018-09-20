@@ -64,6 +64,7 @@ public:
 	RCUpdate(const Parameters &parameters);
 
 	/**
+	 * subscribe 관련 초기화
 	 * initialize subscriptions etc.
 	 * @return 0 on success, <0 otherwise
 	 */
@@ -75,12 +76,14 @@ public:
 	void deinit();
 
 	/**
+	 * mavlink로부터 rc_parameter_map의 변경이 있는지 검사하여 적용
 	 * Check for changes in rc_parameter_map
 	 */
 	void rc_parameter_map_poll(ParameterHandles &parameter_handles, bool forced = false);
 
 	/**
-	 * parameter가 변경된 경우 이 method를 호출하면 RC function을 업데이트함.
+	 * parameter로 rc 매핑을 변경하는 경우처럼,
+	 * parameter가 변경된 경우 이 method를 호출하면 RC function 매핑을 업데이트함.
 	 * update the RC functions. Call this when the parameters change.
 	 */
 	void update_rc_functions();
@@ -94,7 +97,7 @@ public:
 private:
 
 	/**
-	 * 특정 RC function에 대해서 유효한 범위의 값을 얻기. 매핑이 안된 경우 NAN을 반환
+	 * 특정 RC function에 대한 rc 값 얻기. 유효한 범위의 값을 얻기. 매핑이 안된 경우 NAN을 반환
 	 * Get and limit value for specified RC function. Returns NAN if not mapped.
 	 */
 	float		get_rc_value(uint8_t func, float min_value, float max_value);
@@ -107,7 +110,8 @@ private:
 	switch_pos_t	get_rc_sw2pos_position(uint8_t func, float on_th, bool on_inv);
 
 	/**
-	 * 마지막 업데이트 이후로 기능이 활성화되거나 입력이 변경된 경우, RC 채널로부터 paramter를 업데이트
+	 * 조정기 rc 값으로 지정한 param를 값을 설정.
+	 * 매핑 기능이 활성화 및 값이 변경된 경우에 대해서 paramter를 업데이트
 	 * Update parameters from RC channels if the functionality is activated and the
 	 * input has changed since the last update
 	 *
@@ -115,23 +119,26 @@ private:
 	 */
 	void set_params_from_rc(const ParameterHandles &parameter_handles);
 
-
+	// sbus로부터 rc값, mavlink로부터  param map 관련 topic subscribe
 	int		_rc_sub = -1;			/**< raw rc channels data subscription */
 	int		_rc_parameter_map_sub = -1;		/**< rc parameter map subscription */
 
+	// rc 제어, manual contro, actuator group3 topic을 publish
 	orb_advert_t	_rc_pub = nullptr;		/**< raw r/c control topic */
 	orb_advert_t	_manual_control_pub = nullptr;	/**< manual control signal topic */
 	orb_advert_t	_actuator_group_3_pub = nullptr;/**< manual control as actuator topic */
 
+	// 채널은 18개, 기능은 26개까지 지원
 	struct rc_channels_s _rc;			/**< r/c channel data */
 
 	struct rc_parameter_map_s _rc_parameter_map;
-	float _param_rc_values[rc_parameter_map_s::RC_PARAM_MAP_NCHAN];	/**< parameter values for RC control */
+	float _param_rc_values[rc_parameter_map_s::RC_PARAM_MAP_NCHAN];	/**< parameter values for RC control */ // RC param관련 rc로부터의 값을 저장. param을 실제로 업데이트 여부를 판단하기 위해서 현재 rc값과 이 값을 비교하는 용도.
 
 	const Parameters &_parameters;
 
 	hrt_abstime _last_rc_to_param_map_time = 0;
 
+	// 기본적으로 비행 조정인 roll, pitch, yaw, throttle의 경우 low pass 필터를 사용하여 부드럽게 동작하도록 함.
 	math::LowPassFilter2p _filter_roll; /**< filters for the main 4 stick inputs */
 	math::LowPassFilter2p _filter_pitch; /** we want smooth setpoints as inputs to the controllers */
 	math::LowPassFilter2p _filter_yaw;

@@ -61,7 +61,8 @@ RCUpdate::RCUpdate(const Parameters &parameters)
 	memset(&_param_rc_values, 0, sizeof(_param_rc_values));
 }
 
-// rc 정보관려녀 input_rc(sbus driver))와 rc_parameter_map subscribe(mavlink)를 위한 초기화
+// rc관련 subscribe 초기화. input_rc(sbus driver))와 rc_parameter_map subscribe(mavlink)를 위한 초기화.
+// rc_parameter_map은 특정 param id와 rc 채널과 매핑시켜서 rc로 해당 param 값을 조정가능.
 int RCUpdate::init()
 {
 	_rc_sub = orb_subscribe(ORB_ID(input_rc));
@@ -85,9 +86,11 @@ void RCUpdate::deinit()
 	orb_unsubscribe(_rc_parameter_map_sub);
 }
 
+// rc기능 <-> rc채널을 매핑
 void RCUpdate::update_rc_functions()
 {
-	// RC의 기능을 파라미터에서 읽은 값으로 설정
+	// 채널은 18개, function은 총 26개. initialize_parameter_handles()에서 _parameters를 업데이트 
+	// RC의 기능과 param에 설정된 채널을 매핑. 설정되지 않은 경우 0보다 작은 값인 -1.
 	/* update RC function mappings */
 	_rc.function[rc_channels_s::RC_CHANNELS_FUNCTION_THROTTLE] = _parameters.rc_map_throttle - 1;
 	_rc.function[rc_channels_s::RC_CHANNELS_FUNCTION_ROLL] = _parameters.rc_map_roll - 1;
@@ -120,7 +123,7 @@ void RCUpdate::update_rc_functions()
 		_rc.function[rc_channels_s::RC_CHANNELS_FUNCTION_PARAM_1 + i] = _parameters.rc_map_param[i] - 1;
 	}
 
-	// RC 로우패스 필터의 sample rate와 cutoff rate를 파라미터에서 읽어서 설정
+	// RC 로우패스 필터 사용을 위한 인자로 sample rate와 cutoff rate를 파라미터에서 읽어서 설정
 	// roll, pitch, yaw, throttle에 대해서 부드럽게 동작하도록 하기 위해서 lowpass filter 먹임
 	/* update the RC low pass filter frequencies */
 	_filter_roll.set_cutoff_frequency(_parameters.rc_flt_smp_rate, _parameters.rc_flt_cutoff);
@@ -133,6 +136,7 @@ void RCUpdate::update_rc_functions()
 	_filter_throttle.reset(0.f);
 }
 
+// mavlink로부터 rc_parameter_map topic관련 업데이트가 있는지 보고 업데이트
 void
 RCUpdate::rc_parameter_map_poll(ParameterHandles &parameter_handles, bool forced)
 {
@@ -142,20 +146,23 @@ RCUpdate::rc_parameter_map_poll(ParameterHandles &parameter_handles, bool forced
 	if (map_updated) {
 		orb_copy(ORB_ID(rc_parameter_map), _rc_parameter_map_sub, &_rc_parameter_map);
 
+		// RC 채널과 매핑되어 있는 param 핸들을 업데이트 
 		/* update parameter handles to which the RC channels are mapped */
 		for (int i = 0; i < rc_parameter_map_s::RC_PARAM_MAP_NCHAN; i++) {
 			if (_rc.function[rc_channels_s::RC_CHANNELS_FUNCTION_PARAM_1 + i] < 0 || !_rc_parameter_map.valid[i]) {
 				/* This RC channel is not mapped to a RC-Parameter Channel (e.g. RC_MAP_PARAM1 == 0)
 				 * or no request to map this channel to a param has been sent via mavlink
 				 */
+				// 이 RC 채널이 RC-Parameter Channel과 매핑되어 있는지 않는 경우 혹은 이 채널과 mavlink로 받은 param에 대한 매핑 요청이 없는 경우
 				continue;
 			}
 
+			// index가 설정되어 있는 경우에는 index로 핸들을 설정하고 그렇지 않으면 id를 사용
 			/* Set the handle by index if the index is set, otherwise use the id */
-			if (_rc_parameter_map.param_index[i] >= 0) {
+			if (_rc_parameter_map.param_index[i] >= 0) { // index로 param 핸들 설정
 				parameter_handles.rc_param[i] = param_for_used_index((unsigned)_rc_parameter_map.param_index[i]);
 
-			} else {
+			} else { // param_index[i]가 -1이면 param_id를 사용. param_id는 문자열
 				parameter_handles.rc_param[i] = param_find(&_rc_parameter_map.param_id[i * (rc_parameter_map_s::PARAM_ID_LEN + 1)]);
 			}
 
@@ -163,6 +170,7 @@ RCUpdate::rc_parameter_map_poll(ParameterHandles &parameter_handles, bool forced
 
 		PX4_DEBUG("rc to parameter map updated");
 
+		// 매핑된 정보 출력
 		for (int i = 0; i < rc_parameter_map_s::RC_PARAM_MAP_NCHAN; i++) {
 			PX4_DEBUG("\ti %d param_id %s scale %.3f value0 %.3f, min %.3f, max %.3f",
 				  i,
@@ -176,7 +184,7 @@ RCUpdate::rc_parameter_map_poll(ParameterHandles &parameter_handles, bool forced
 	}
 }
 
-//해당 rc 기능(func)이 설정되어 있는 경우 설정값을 반환
+//해당 rc 기능(func)이 설정되어 있는 경우 매핑된 채널의 값을 가져오기
 float
 RCUpdate::get_rc_value(uint8_t func, float min_value, float max_value)
 {
@@ -189,49 +197,53 @@ RCUpdate::get_rc_value(uint8_t func, float min_value, float max_value)
 	}
 }
 
+// 3 단계 스위치로 사용하는 경우, 현재 RC 조정기의 값으로 ON/Middle/OFF 를 반환
 switch_pos_t
 RCUpdate::get_rc_sw3pos_position(uint8_t func, float on_th, bool on_inv, float mid_th, bool mid_inv)
 {
-	if (_rc.function[func] >= 0) {
+	if (_rc.function[func] >= 0) { // 해당 rc채널이 사용 매핑이 된 경우
 		float value = 0.5f * _rc.channels[_rc.function[func]] + 0.5f;
 
-		if (on_inv ? value < on_th : value > on_th) {
+		// rc 조정기의 값으로 ON/MIDDLE/OFF 상태를 반환
+		if (on_inv ? value < on_th : value > on_th) { // inverse 상태 체크. threshold 보다 크면 ON
 			return manual_control_setpoint_s::SWITCH_POS_ON;
 
-		} else if (mid_inv ? value < mid_th : value > mid_th) {
+		} else if (mid_inv ? value < mid_th : value > mid_th) { // mid threshold보다 크면 MIDDLE
 			return manual_control_setpoint_s::SWITCH_POS_MIDDLE;
 
-		} else {
+		} else { // 그렇지 않으면 OFF 상태
 			return manual_control_setpoint_s::SWITCH_POS_OFF;
 		}
 
-	} else {
+	} else { // 아예 사용 설정 매핑이 안된 경우 NONE
 		return manual_control_setpoint_s::SWITCH_POS_NONE;
 	}
 }
 
+// 2 단계 스위치로 사용하는 경우, 현재 RC 조정기의 값으로 ON/OFF 를 반환 
 switch_pos_t
 RCUpdate::get_rc_sw2pos_position(uint8_t func, float on_th, bool on_inv)
 {
-	if (_rc.function[func] >= 0) {
+	if (_rc.function[func] >= 0) { // 해당 rc채널이 사용 매핑이 된 경우
 		float value = 0.5f * _rc.channels[_rc.function[func]] + 0.5f;
 
-		if (on_inv ? value < on_th : value > on_th) {
+		if (on_inv ? value < on_th : value > on_th) { // inverse 체크.  threshold 보다 크면 ON
 			return manual_control_setpoint_s::SWITCH_POS_ON;
 
-		} else {
+		} else { // 그렇지 않으면 OFF
 			return manual_control_setpoint_s::SWITCH_POS_OFF;
 		}
 
-	} else {
+	} else { // 매핑이 안되어 있는 경우 NONE
 		return manual_control_setpoint_s::SWITCH_POS_NONE;
 	}
 }
 
-// rc에서 가지고 온 값으로 param 값을 설정
+// rc에서 조정기 값(knob 타입)으로 param 값을 설정
 void
 RCUpdate::set_params_from_rc(const ParameterHandles &parameter_handles)
 {
+	// RC_PARAM_MAP_NCHAN 즉 3개 채널에 대해서 매핑 여부 확인하고 매핑이 되어 있는 경우에 대해서 해당 param 값을 변경
 	for (int i = 0; i < rc_parameter_map_s::RC_PARAM_MAP_NCHAN; i++) {
 		if (_rc.function[rc_channels_s::RC_CHANNELS_FUNCTION_PARAM_1 + i] < 0 || !_rc_parameter_map.valid[i]) { // RC-Parameter 채널이 매핑이 안되어 있으면 빠져나감
 			/* This RC channel is not mapped to a RC-Parameter Channel (e.g. RC_MAP_PARAM1 == 0)
@@ -240,9 +252,10 @@ RCUpdate::set_params_from_rc(const ParameterHandles &parameter_handles)
 			continue;
 		}
 
+		// rc 채널의 값과 param에 저장된 값을 비교해서 
 		float rc_val = get_rc_value((rc_channels_s::RC_CHANNELS_FUNCTION_PARAM_1 + i), -1.0, 1.0); //해당 채널로 rc 값을 읽어서
 
-		// 기존 값에서 변경이 있는지 확인하고, 변경이 있는 경우에만 업데이트 수행
+		// rc 값과 기존 param 값 사이에 차이가 있다고 판단되면, param에 변경된 값을 계산하여 update 한다.
 		/* Check if the value has changed,
 		 * maybe we need to introduce a more aggressive limit here */
 		if (rc_val > _param_rc_values[i] + FLT_EPSILON || rc_val < _param_rc_values[i] - FLT_EPSILON) {
@@ -255,7 +268,7 @@ RCUpdate::set_params_from_rc(const ParameterHandles &parameter_handles)
 	}
 }
 
-// rc값이 update된 경우, 
+// raw rc값이 update된 경우, 이 값을 이용해서 rc_channels, manual_control_setpoint, actuator_controls_3를 publish 하기
 void
 RCUpdate::rc_poll(const ParameterHandles &parameter_handles)
 {
@@ -271,7 +284,7 @@ RCUpdate::rc_poll(const ParameterHandles &parameter_handles)
 		/* detect RC signal loss */
 		bool signal_lost;
 
-		// 기본적으로 rc 신호가 유효한 상태인지를 체크하기 위해 4개 flag 상태를 조사
+		// 기본적으로 rc 신호가 유효한 상태인지를 체크하기 위해 4개 flag 상태를 조사. 채널 설정은 최소 5개 이상인 되어 있어야 정상.
 		/* check flags and require at least four channels to consider the signal valid */
 		if (rc_input.rc_lost || rc_input.rc_failsafe || rc_input.channel_count < 4) {
 			/* signal is lost or no enough channels */
@@ -281,13 +294,18 @@ RCUpdate::rc_poll(const ParameterHandles &parameter_handles)
 			/* signal looks good */
 			signal_lost = false;
 
+			// 특정 채널을 failsfae 채널로 두고 이 채널이 특정 범위를 벗어나는 경우 signal_lost로 판정.
+			// 기본적으로 throttle 채널을 사용하며 사용자가 18개 채널 중에 하나를 선택할 수도 있음.
 			/* check failsafe */ // failsafe를 검사. failsafe 채널을 가지고 와서 
 			int8_t fs_ch = _rc.function[_parameters.rc_map_failsafe]; // get channel mapped to throttle
 
-			if (_parameters.rc_map_failsafe > 0) { // if not 0, use channel number instead of rc.function mapping // 매핑이 된 경우 fs_ch에 저장
+			// rc_map_failsafe가 0인 경우에는 RC_CHANNELS_FUNCTION_THROTTLE = 0과 같이 throttle 채널을 fs_ch에 할당함.
+			// 0이 아닌 값이면 rc_map_failsafe가 채널값이므로 이를 fs_ch에 할당
+			if (_parameters.rc_map_failsafe > 0) { // if not 0, use channel number instead of rc.function mapping
 				fs_ch = _parameters.rc_map_failsafe - 1;
 			}
 
+			// fs_ch 채널이 설정되어 있고 rc_fails_thr는 0보다 큰 경우 
 			if (_parameters.rc_fails_thr > 0 && fs_ch >= 0) { // failsafe throttle 값이 failsafe 채널의 값의 범위를 벗어나는 경우, 리시버에서 신호를 받지 못한 상태라고 결정하고 failsafe를 시작
 				/* failsafe configured */
 				if ((_parameters.rc_fails_thr < _parameters.min[fs_ch] && rc_input.values[fs_ch] < _parameters.rc_fails_thr) ||
@@ -300,11 +318,11 @@ RCUpdate::rc_poll(const ParameterHandles &parameter_handles)
 
 		unsigned channel_limit = rc_input.channel_count;
 
-		if (channel_limit > RC_MAX_CHAN_COUNT) {
+		if (channel_limit > RC_MAX_CHAN_COUNT) { //18개보다 큰 값인 경우 18로 제한
 			channel_limit = RC_MAX_CHAN_COUNT;
 		}
 
-		// 신호가 유효한 상태가 아니더라도 raw 메시지에서 scale에 해당되는 부분을 읽어온다.
+		// raw 메시지에서 scale에 해당되는 부분을 읽어온다.
 		/* read out and scale values from raw message even if signal is invalid */
 		for (unsigned int i = 0; i < channel_limit; i++) {
 
@@ -322,8 +340,10 @@ RCUpdate::rc_poll(const ParameterHandles &parameter_handles)
 
 			/*
 			 * lower와 upper 범위에 대해서 중간 지점으로 scale
-			 * 동일한 endpoint나 slop을 공유하지 않을 수 있으므로 필요. 먼저 중간 위나 아래로 0..1 범위로 정규화해서 전체 범위는 2(-1..1)이 됨.
-			 * 중간(trim)이 min 값임녀 0..1로 스케일링하고 중간(trim)이 max인 경우에는 -1..0로 스케일링한다.
+			 * 동일한 endpoint나 slop을 공유하지 않을 수 있으므로 필요.
+			 * trim은 param에서 Mid point 값으로 설정. channels[]는 -1..1 로 스케일링 한 값이 들어감.
+			 * 먼저 중간의 위나 아래에 대해서 0..1 범위로 정규화하며 이렇게 하면 전체 범위는 2(-1..1)가 된다. (중간 아래가 1, 중간 위가 1)
+			 * 중간(trim)이 min 값이면 0..1로 스케일링하고 중간(trim)이 max인 경우에는 -1..0로 스케일링한다.
 			 * 위에 1단계에서 min/max 범위에서 0으로 나누는 경우는 발생하지 않는다. 중간이 min이나 max인 경우에 NaN 경우가 되는 일이 없음.
 			 * 2) Scale around the mid point differently for lower and upper range.
 			 *
@@ -340,20 +360,22 @@ RCUpdate::rc_poll(const ParameterHandles &parameter_handles)
 			 *
 			 * DO NOT REMOVE OR ALTER STEP 1!
 			 */
+			// rc 값 > trim + deadzone경우 측 rc 값이 중간값 상위에 있는 경우
 			if (rc_input.values[i] > (_parameters.trim[i] + _parameters.dz[i])) {
 				_rc.channels[i] = (rc_input.values[i] - _parameters.trim[i] - _parameters.dz[i]) / (float)(
 							  _parameters.max[i] - _parameters.trim[i] - _parameters.dz[i]);
 
-			} else if (rc_input.values[i] < (_parameters.trim[i] - _parameters.dz[i])) {
+			// rc 값 < trim - deadzone경우 측 rc 값이 중간값 하위에 있는 경우
+			} else if (rc_input.values[i] < (_parameters.trim[i] - _parameters.dz[i])) { // 
 				_rc.channels[i] = (rc_input.values[i] - _parameters.trim[i] + _parameters.dz[i]) / (float)(
 							  _parameters.trim[i] - _parameters.min[i] - _parameters.dz[i]);
 
-			} else { // dead zone에 있는 경우 출력은 0이 됨
+			} else { // rc 값이 (trim +- dead zone)내에 있는 경우 출력은 0이 됨
 				/* in the configured dead zone, output zero */
 				_rc.channels[i] = 0.0f;
 			}
 
-			_rc.channels[i] *= _parameters.rev[i];
+			_rc.channels[i] *= _parameters.rev[i]; // rever 설정된 경우 적용
 
 			/* handle any parameter-induced blowups */ // 채널 값으로 사용할 수 없는 값이 경우 0으로 처리
 			if (!PX4_ISFINITE(_rc.channels[i])) {
@@ -362,13 +384,13 @@ RCUpdate::rc_poll(const ParameterHandles &parameter_handles)
 		}
 
 		// publish를 위해 _rc에 결과 저장
-		_rc.channel_count = rc_input.channel_count;
+		_rc.channel_count = rc_input.channel_count; // 유효한 채널 갯수
 		_rc.rssi = rc_input.rssi;
 		_rc.signal_lost = signal_lost;
 		_rc.timestamp = rc_input.timestamp_last_signal;
 		_rc.frame_drop_count = rc_input.rc_lost_frame_count;
 
-		// rc 신호가 유효하지 않더로도 디버깅 목적으로 publish한다.
+		// rc_channels을 publish(rc 신호가 유효하지 않더로도 디버깅 목적으로 publish)
 		/* publish rc_channels topic even if signal is invalid, for debug */
 		int instance;
 		orb_publish_auto(ORB_ID(rc_channels), &_rc_pub, &_rc, &instance, ORB_PRIO_DEFAULT);
@@ -403,34 +425,49 @@ RCUpdate::rc_poll(const ParameterHandles &parameter_handles)
 			manual.r = math::constrain(_filter_yaw.apply(manual.r), -1.f, 1.f);
 			manual.z = math::constrain(_filter_throttle.apply(manual.z), 0.f, 1.f);
 
-			// flightmode가 매핑되어 있는 경우, 
+			// flightmode가 매핑된 채널이 있는 경우, 
 			if (_parameters.rc_map_flightmode > 0) {
 
+				// 해당 채널에 최대 6개 slot으로 할당이 가능
 				/* the number of valid slots equals the index of the max marker minus one */
 				const int num_slots = manual_control_setpoint_s::MODE_SLOT_MAX;
 
+				// 2.0/num_slots은 slot의 폭이고 여기에 2를 나눠서 하나의 slot의 반폭
 				/* the half width of the range of a slot is the total range
 				 * divided by the number of slots, again divided by two
 				 */
 				const float slot_width_half = 2.0f / num_slots / 2.0f;
 
+				// slot min/max에 대한 offset 
 				/* min is -1, max is +1, range is 2. We offset below min and max */
 				const float slot_min = -1.0f - 0.05f;
 				const float slot_max = 1.0f + 0.05f;
 
+				// min/max를 이용해서 0..1 구간에 대해서 먼저 정규화해서 매핑을 얻는다.
+				// 다음으로 slot의 갯수를 곱해서 해당 slot을 얻을 수 있음.
+				// 마지막으로 half slot width를 추가해서 정수 반올림이 되도록 해서 최종 index를 구하는 방식
 				/* the slot gets mapped by first normalizing into a 0..1 interval using min
 				 * and max. Then the right slot is obtained by multiplying with the number of
 				 * slots. And finally we add half a slot width to ensure that integer rounding
 				 * will take us to the correct final index.
 				 */
-				manual.mode_slot = (((((_rc.channels[_parameters.rc_map_flightmode - 1] - slot_min) * num_slots) + slot_width_half) /
-						     (slot_max - slot_min)) + (1.0f / num_slots));
+				manual.mode_slot = (
+					(
+					(
+					(
+						(_rc.channels[_parameters.rc_map_flightmode - 1] - slot_min) * 
+					num_slots)
+					 + slot_width_half)
+					 /
+					(slot_max - slot_min)
+					) + (1.0f / num_slots));
 
 				if (manual.mode_slot >= num_slots) {
 					manual.mode_slot = num_slots - 1;
 				}
 			}
 
+			// mode 스위치 상태 가져오기
 			/* mode switches */
 			manual.mode_switch = get_rc_sw3pos_position(rc_channels_s::RC_CHANNELS_FUNCTION_MODE, _parameters.rc_auto_th,
 					     _parameters.rc_auto_inv, _parameters.rc_assist_th, _parameters.rc_assist_inv);
@@ -464,6 +501,7 @@ RCUpdate::rc_poll(const ParameterHandles &parameter_handles)
 			orb_publish_auto(ORB_ID(manual_control_setpoint), &_manual_control_pub, &manual, &instance,
 					 ORB_PRIO_HIGH);
 
+			// Control Group #3 (Manual Passthrough)
 			/* copy from mapped manual control to control group 3 */
 			struct actuator_controls_s actuator_group_3 = {};
 
@@ -483,7 +521,7 @@ RCUpdate::rc_poll(const ParameterHandles &parameter_handles)
 					 ORB_PRIO_DEFAULT);
 
 			/* Update parameters from RC Channels (tuning with RC) if activated */
-			if (hrt_elapsed_time(&_last_rc_to_param_map_time) > 1e6) {
+			if (hrt_elapsed_time(&_last_rc_to_param_map_time) > 1e6) { //1초에 1번 rc로 param설정하는 수행
 				set_params_from_rc(parameter_handles);
 				_last_rc_to_param_map_time = hrt_absolute_time();
 			}

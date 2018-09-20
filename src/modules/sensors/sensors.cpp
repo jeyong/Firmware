@@ -210,7 +210,7 @@ private:
 	int		parameters_update();
 
 	/**
-	 * adc관련 초기화 수행
+	 * adc관련 초기화 수행. adc path 핸들 얻기
 	 * Do adc-related initialisation.
 	 */
 	int		adc_init();
@@ -444,34 +444,42 @@ Sensors::adc_poll()
 	hrt_abstime t = hrt_absolute_time();
 
 	/* rate limit to 100 Hz */
-	if (t - _last_adc >= 10000) {
+	if (t - _last_adc >= 10000) { // 10ms 이상 지날때 마다  실행되도록 (너무 자주 실행되지 않도록)
+		// 최대 12개 채널 정보를 한방에 담을 수 있도록 공간 만들기
 		/* make space for a maximum of twelve channels (to ensure reading all channels at once) */
 		px4_adc_msg_t buf_adc[PX4_MAX_ADC_CHANNELS];
+		
+		// 버퍼에 모든 채널값을 한방에 읽어오기
 		/* read all channels available */
 		int ret = _h_adc.read(&buf_adc, sizeof(buf_adc));
 
 #if BOARD_NUMBER_BRICKS > 0
 		//todo:abosorb into new class Power
 
+		// 배터리 정보를 위해서 battery_status를 publish. 
 		/* For legacy support we publish the battery_status for the Battery that is
 		 * associated with the Brick that is the selected source for VDD_5V_IN
 		 * Selection is done in HW ala a LTC4417 or similar, or may be hard coded
 		 * Like in the FMUv4
 		 */
 
+		// 각 brick에 해당하는 ADC 채널 초기화.
 		/* The ADC channels that  are associated with each brick, in power controller
 		 * priority order highest to lowest, as defined by the board config.
 		 */
-		int   bat_voltage_v_chan[BOARD_NUMBER_BRICKS] = BOARD_BATT_V_LIST;
-		int   bat_voltage_i_chan[BOARD_NUMBER_BRICKS] = BOARD_BATT_I_LIST;
+		int   bat_voltage_v_chan[BOARD_NUMBER_BRICKS] = BOARD_BATT_V_LIST; // voltage 채널
+		int   bat_voltage_i_chan[BOARD_NUMBER_BRICKS] = BOARD_BATT_I_LIST; // current 채널
 
+		// 유효 신호(hw에 따라)는 각 blick과 관련되어 있음.
 		/* The valid signals (HW dependent) are associated with each brick */
-		bool  valid_chan[BOARD_NUMBER_BRICKS] = BOARD_BRICK_VALID_LIST;
+		bool  valid_chan[BOARD_NUMBER_BRICKS] = BOARD_BRICK_VALID_LIST; // 유효한 blick인지 신호를 받기 위한 채널
 
+		// brick마다 읽지 않은 채널의 경우 0으로 초기화
 		/* Per Brick readings with default unread channels at 0 */
 		float bat_current_a[BOARD_NUMBER_BRICKS] = {0.0f};
 		float bat_voltage_v[BOARD_NUMBER_BRICKS] = {0.0f};
 
+		// 유효한 채널 중에서, VDD_5V_IN에 대한 소스는 선택한 가장 낮은 index(우선 순위가 가장 높은)를 사용. 0보다 작은 경우 선택된 것이 없다는 뜻. 
 		/* Based on the valid_chan, used to indicate the selected the lowest index
 		 * (highest priority) supply that is the source for the VDD_5V_IN
 		 * When < 0 none selected
@@ -481,7 +489,7 @@ Sensors::adc_poll()
 
 #endif /* BOARD_NUMBER_BRICKS > 0 */
 
-		if (ret >= (int)sizeof(buf_adc[0])) {
+		if (ret >= (int)sizeof(buf_adc[0])) { //ret는 adc를 몇개 읽었는지를 나타냄. 즉 buf_adc[ret-1]까지 유효함
 
 			/* Read add channels we got */
 			for (unsigned i = 0; i < ret / sizeof(buf_adc[0]); i++) {
@@ -517,8 +525,8 @@ Sensors::adc_poll()
 
 #if BOARD_NUMBER_BRICKS > 0
 
-					for (int b = 0; b < BOARD_NUMBER_BRICKS; b++) {
-
+					for (int b = 0; b < BOARD_NUMBER_BRICKS; b++) { // 연결된 brick 갯수 만큼
+						// 아직 선택된 source가 없는 경우, pub이 가능하고 유효한 채널인 경우 이를 VDD_5V_IN 으로 선택.
 						/* Once we have subscriptions, Do this once for the lowest (highest priority
 						 * supply on power controller) that is valid.
 						 */
@@ -531,6 +539,7 @@ Sensors::adc_poll()
 
 #if BOARD_NUMBER_BRICKS > 1
 
+							// selected_source가 instance 0이 아닌 경우 _battery_pub_intance0ndx로 이동 
 							/* Move the selected_source to instance 0 */
 							if (_battery_pub_intance0ndx != selected_source) {
 
@@ -543,13 +552,15 @@ Sensors::adc_poll()
 #endif /* BOARD_NUMBER_BRICKS > 1 */
 						}
 
+						// 특정 채널을 찾아서 raw voltage 값에서 측정 데이터로 
 						// todo:per brick scaling
 						/* look for specific channels and process the raw voltage to measurement data */
 						if (bat_voltage_v_chan[b] == buf_adc[i].am_channel) {
+							// am_data는 ADC convert result로 여기에 scaling값을 곱해서 voltage 값을 얻는다. 여기에 battery_v_div로 나눠주면 전압을 구함.
 							/* Voltage in volts */
 							bat_voltage_v[b] = (buf_adc[i].am_data * _parameters.battery_voltage_scaling) * _parameters.battery_v_div;
 
-						} else if (bat_voltage_i_chan[b] == buf_adc[i].am_channel) {
+						} else if (bat_voltage_i_chan[b] == buf_adc[i].am_channel) { // am_data가 전류로 ADC convert 결과인 경우, 
 							bat_current_a[b] = ((buf_adc[i].am_data * _parameters.battery_current_scaling)
 									    - _parameters.battery_current_offset) * _parameters.battery_a_per_v;
 						}
@@ -564,9 +575,11 @@ Sensors::adc_poll()
 
 				for (int b = 0; b < BOARD_NUMBER_BRICKS; b++) {
 
+					// BOARD_ADC_OPEN_CIRCUIT_V 보다 측정한 전압이 큰 경우 brick이 연결되었다고 판단
 					/* Consider the brick connected if there is a voltage */
 					bool connected = bat_voltage_v[b] > BOARD_ADC_OPEN_CIRCUIT_V;
 
+					// BOARD_ADC_OPEN_CIRCUIT_V가 BOARD_VALID_UV보다 큰 경우 해당 채널이 유효한지 여부 체크
 					/* In the case where the BOARD_ADC_OPEN_CIRCUIT_V is
 					 * greater than the BOARD_VALID_UV let the HW qualify that it
 					 * is connected.
@@ -575,9 +588,11 @@ Sensors::adc_poll()
 						connected &= valid_chan[b];
 					}
 
+					// 전압 측정 시점의 throttle 값도 함께 제공해야 (throttle에 따라 전압이 변하므로)
 					actuator_controls_s ctrl;
 					orb_copy(ORB_ID(actuator_controls_0), _actuator_ctrl_0_sub, &ctrl);
 
+					// 해당 index의 battery 상태 update하고 publish. 전압, 전류, 연결여부, 선택된 소스인지 여부, throttle 값(throttle이 전압에 영향을 미치므로 측정시 throttle 값을 아는 것이 중요), armed 상태, 
 					battery_status_s battery_status;
 					_battery[b].updateBatteryStatus(t, bat_voltage_v[b], bat_current_a[b],
 									connected, selected_source == b, b,
@@ -590,7 +605,7 @@ Sensors::adc_poll()
 
 #endif /* BOARD_NUMBER_BRICKS > 0 */
 
-			_last_adc = t;
+			_last_adc = t; // 최종 측정 시간 저장
 		}
 	}
 }

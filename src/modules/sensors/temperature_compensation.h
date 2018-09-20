@@ -83,7 +83,7 @@ public:
 
 	/**
 	 * gyro 센서 데이터에 대한 온도 보정 적용
-	 * 리턴값 : error(-1), 변경 없음(0), 보정이 적용되었지만 offset 및 scale 변경 없음(1), 보정, offset 및 scale 변경됨(2)
+	 * 리턴값 : error(-1), 변경 없음(0), 보정이 적용되었지만 offset 및 scale 변경 없음(1), 보정과 offset 및 scale 변경됨(2)
 	 * Apply Thermal corrections to gyro (& other) sensor data.
 	 * @param topic_instance uORB topic instance
 	 * @param sensor_data input sensor data, output sensor data with applied corrections

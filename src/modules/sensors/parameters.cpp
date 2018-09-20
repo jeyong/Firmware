@@ -42,9 +42,7 @@
 namespace sensors
 {
 
-// 파라미터에서 rc, battery, board, calibration(accel, gyro, mag) 읽어서 parameter_handler에 할당
-// parameter_handler은 값을 변경되는 경우 추후에 update()를 호출하여 실제 param을 update하는 용도로 사용
-// parameter는 일종의 array형태로 되어 있으면 parameter handle이라함은 array로부터의 uint32 타입의 offset 값이 된다. 
+// sensor 모듈에서 사용하는 파라미터 rc, battery, board, calibration(accel, gyro, mag) 등에 접근을 위한 parameter_handler을 초기화
 void initialize_parameter_handles(ParameterHandles &parameter_handles)
 {
 	/* basic r/c parameters */
@@ -164,6 +162,7 @@ void initialize_parameter_handles(ParameterHandles &parameter_handles)
 	parameter_handles.air_tube_length = param_find("CAL_AIR_TUBELEN");
 	parameter_handles.air_tube_diameter_mm = param_find("CAL_AIR_TUBED_MM");
 
+	// 아래는 QGC가 param request list를 하면 보내줘야하는 param으로 아래에 리스트업 해두는 목적
 	// These are parameters for which QGroundControl always expects to be returned in a list request.
 	// We do a param_find here to force them into the list.
 	(void)param_find("RC_CHAN_CNT");
@@ -193,7 +192,7 @@ void initialize_parameter_handles(ParameterHandles &parameter_handles)
 	(void)param_find("SYS_CAL_TMIN");
 }
 
-// 전체 parameter_handles과 parameter를 인자로 주고 parameter에 현재 param에 저장된 값으로 update하는 함수
+// parameter_handles을 이용해서 param 값을 읽어온다.
 // param_get()은 param의 handle을 인자로 주고 값을 반환받는 형태. 
 int update_parameters(const ParameterHandles &parameter_handles, Parameters &parameters)
 {

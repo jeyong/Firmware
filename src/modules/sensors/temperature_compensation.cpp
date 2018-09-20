@@ -438,21 +438,21 @@ int TemperatureCompensation::apply_corrections_accel(int topic_instance, matrix:
 	// topic에 따른 param에서 해당 index 가져오기
 	uint8_t mapping = _accel_data.device_mapping[topic_instance];
 
-	if (mapping == 255) {
+	if (mapping == 255) { //mapping이 안된 경우
 		return -1;
 	}
 
-	// tc offset 계산
+	// 칼리브레이션, 온도를 가지고 tc offset 계산
 	calc_thermal_offsets_3D(_parameters.accel_cal_data[mapping], temperature, offsets);
 
-	// offset과 scales로 센서 data 계산
+	// offset과 scales로 센서 data 계산 (offset 값을 빼주고 scale값을 곱하기)
 	// get the sensor scale factors and correct the data
 	for (unsigned axis_index = 0; axis_index < 3; axis_index++) {
 		scales[axis_index] = _parameters.accel_cal_data[mapping].scale[axis_index];
 		sensor_data(axis_index) = (sensor_data(axis_index) - offsets[axis_index]) * scales[axis_index];
 	}
 
-	// 온도 차이가 1도 이상인 경우 baro 최신 온도를 업데이트. 
+	// 이전과 온도 차이가 1도 이상인 경우 baro 최신 온도를 업데이트. 
 	if (fabsf(temperature - _accel_data.last_temperature[topic_instance]) > 1.0f) {
 		_accel_data.last_temperature[topic_instance] = temperature;
 		return 2;

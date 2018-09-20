@@ -576,6 +576,8 @@ void VotedSensorsUpdate::parameters_update()
 
 }
 
+// 가장 적합한 accel 정보를 업데이트해서 결국 publish하기 위함
+// 인자로 받은 raw에 best accel로부터  dt, m/s^2 를 넣는 것이 목적
 void VotedSensorsUpdate::accel_poll(struct sensor_combined_s &raw)
 {
 	//offset과 scale을 가지고
@@ -597,7 +599,7 @@ void VotedSensorsUpdate::accel_poll(struct sensor_combined_s &raw)
 				continue; //ignore invalid data
 			}
 
-			// 우선순위가 0인 경우 accel의 priority를 업데이트 
+			// 우선순위 초기화가 안된 경우 accel의 priority를 업데이트 
 			// First publication with data
 			if (_accel.priority[uorb_index] == 0) {
 				int32_t priority = 0;
@@ -622,15 +624,15 @@ void VotedSensorsUpdate::accel_poll(struct sensor_combined_s &raw)
 
 				// 보정을 수행하기 전에 속도 변화량을 가속도로 데이터로 변환 
 				// convert the delta velocities to an equivalent acceleration before application of corrections
-				float dt_inv = 1.e6f / accel_report.integral_dt;
-				accel_data = matrix::Vector3f(accel_report.x_integral * dt_inv,
+				float dt_inv = 1.e6f / accel_report.integral_dt; // 속도에 대한 미분을 위해서 inverse dt를 미리 계산
+				accel_data = matrix::Vector3f(accel_report.x_integral * dt_inv, // x, y, z축 속도에 대해서 dt로 나눠주면 accel 정보를 가짐
 							      accel_report.y_integral * dt_inv,
 							      accel_report.z_integral * dt_inv);
 
 				_last_sensor_data[uorb_index].accelerometer_integral_dt = accel_report.integral_dt;
 
 			} else { // dt가 0 인 경우
-				// 적분대신에 값을 사용(적분이 더 나은 선택)
+				// 적분대신에 값을 사용(integral_dt를 이용하는게 더 좋은 선택임)
 				// using the value instead of the integral (the integral is the prefered choice)
 
 				// 온도 효과에 대해서 각 센서를 보정
@@ -639,24 +641,24 @@ void VotedSensorsUpdate::accel_poll(struct sensor_combined_s &raw)
 				// Filtering and/or downsampling of temperature should be performed in the driver layer
 				accel_data = matrix::Vector3f(accel_report.x, accel_report.y, accel_report.z);
 
-				// 첫번째 입력인 경우 cse를 처리
+				// 첫번째 입력인 경우 이전 timestamp를 대략 1ms 전으로 설정
 				// handle the cse where this is our first output
 				if (_last_accel_timestamp[uorb_index] == 0) {
 					_last_accel_timestamp[uorb_index] = accel_report.timestamp - 1000;
 				}
 
-				// 가속도 데이터 time stamp에서 차이를 이용해서, 대략적인 dt를 계산
+				// 가속도 데이터 time stamp와 이전 timestamp 차이를 이용해서, 대략적인 dt를 계산
 				// approximate the  delta time using the difference in accel data time stamps
 				_last_sensor_data[uorb_index].accelerometer_integral_dt =
 					(accel_report.timestamp - _last_accel_timestamp[uorb_index]);
 			}
 
-			// 온도 보상 처리
+			// 온도 보정 처리.
 			// handle temperature compensation
 			if (!_hil_enabled) {
 				if (_temperature_compensation.apply_corrections_accel(uorb_index, accel_data, accel_report.temperature,
 						offsets[uorb_index], scales[uorb_index]) == 2) {
-					_corrections_changed = true;
+					_corrections_changed = true; //2를 반환하는 경우 correction이 있었다고 설정
 				}
 			}
 
@@ -664,11 +666,13 @@ void VotedSensorsUpdate::accel_poll(struct sensor_combined_s &raw)
 			// rotate corrected measurements from sensor to body frame
 			accel_data = _board_rotation * accel_data;
 
+			// 최종 센서 데이터에 저장해 두기
 			_last_sensor_data[uorb_index].accelerometer_m_s2[0] = accel_data(0);
 			_last_sensor_data[uorb_index].accelerometer_m_s2[1] = accel_data(1);
 			_last_sensor_data[uorb_index].accelerometer_m_s2[2] = accel_data(2);
 
 			_last_accel_timestamp[uorb_index] = accel_report.timestamp;
+			// voting을 위해 모든 accel 센서의 값을 voter에 추가하기
 			_accel.voter.put(uorb_index, accel_report.timestamp, _last_sensor_data[uorb_index].accelerometer_m_s2,
 					 accel_report.error_count, _accel.priority[uorb_index]);
 		}
@@ -679,7 +683,7 @@ void VotedSensorsUpdate::accel_poll(struct sensor_combined_s &raw)
 	int best_index;
 	_accel.voter.get_best(hrt_absolute_time(), &best_index);
 
-	// 최선 센서 데이터를 출력 변수에 쓰기
+	// best sensor의 데이터를 출력 변수에 쓰기. 즉 raw에 채워주기 
 	// write the best sensor data to the output variables
 	if (best_index >= 0) {
 		raw.accelerometer_integral_dt = _last_sensor_data[best_index].accelerometer_integral_dt;
@@ -831,6 +835,7 @@ void VotedSensorsUpdate::mag_poll(vehicle_magnetometer_s &magnetometer)
 				continue; //ignore invalid data
 			}
 
+			// priority 가 초기화 되어 있지 않은 경우 업데이트
 			// First publication with data
 			if (_mag.priority[uorb_index] == 0) {
 				int32_t priority = 0;
@@ -838,6 +843,7 @@ void VotedSensorsUpdate::mag_poll(vehicle_magnetometer_s &magnetometer)
 				_mag.priority[uorb_index] = (uint8_t)priority;
 			}
 
+			// mag 센서의 x,y, z rotation 상태를 적용하기
 			matrix::Vector3f vect(mag_report.x, mag_report.y, mag_report.z);
 			vect = _mag_rotation[uorb_index] * vect;
 
@@ -846,10 +852,12 @@ void VotedSensorsUpdate::mag_poll(vehicle_magnetometer_s &magnetometer)
 			_last_magnetometer[uorb_index].magnetometer_ga[1] = vect(1);
 			_last_magnetometer[uorb_index].magnetometer_ga[2] = vect(2);
 
+			// best mag 센서를 선택하기 위해서 voter에 넣기
 			_mag.voter.put(uorb_index, mag_report.timestamp, vect.data(), mag_report.error_count, _mag.priority[uorb_index]);
 		}
 	}
 
+	// best 센서를 선정
 	int best_index;
 	_mag.voter.get_best(hrt_absolute_time(), &best_index);
 
@@ -857,24 +865,26 @@ void VotedSensorsUpdate::mag_poll(vehicle_magnetometer_s &magnetometer)
 		magnetometer = _last_magnetometer[best_index];
 		_mag.last_best_vote = (uint8_t)best_index;
 
-		if (_selection.mag_device_id != _mag_device_id[best_index]) {
+		if (_selection.mag_device_id != _mag_device_id[best_index]) { // best mag 센서가 바뀐 경우
 			_selection_changed = true;
 			_selection.mag_device_id = _mag_device_id[best_index];
 		}
 	}
 }
 
+// best baro 센서를 선택하여 해당 센서의 정보를 airday에 채우는 것이 목적
 void VotedSensorsUpdate::baro_poll(vehicle_air_data_s &airdata)
 {
 	bool got_update = false;
 	float *offsets[] = {&_corrections.baro_offset_0, &_corrections.baro_offset_1, &_corrections.baro_offset_2 };
 	float *scales[] = {&_corrections.baro_scale_0, &_corrections.baro_scale_1, &_corrections.baro_scale_2 };
 
+	// baro 정보 subscription을 위해 업데이트 체크
 	for (unsigned uorb_index = 0; uorb_index < _baro.subscription_count; uorb_index++) {
 		bool baro_updated;
 		orb_check(_baro.subscription[uorb_index], &baro_updated);
 
-		if (baro_updated) {
+		if (baro_updated) { // update된 경우에 
 			struct baro_report baro_report;
 
 			int ret = orb_copy(ORB_ID(sensor_baro), _baro.subscription[uorb_index], &baro_report);
@@ -883,9 +893,11 @@ void VotedSensorsUpdate::baro_poll(vehicle_air_data_s &airdata)
 				continue; //ignore invalid data
 			}
 
+			// Pa 단위로 변환을 위해서 100을 곱하기
 			// Convert from millibar to Pa
 			float corrected_pressure = 100.0f * baro_report.pressure;
 
+			// 온도 보정 적용
 			// handle temperature compensation
 			if (!_hil_enabled) {
 				if (_temperature_compensation.apply_corrections_baro(uorb_index, corrected_pressure, baro_report.temperature,
@@ -894,6 +906,7 @@ void VotedSensorsUpdate::baro_poll(vehicle_air_data_s &airdata)
 				}
 			}
 
+			// priority 초기화가 안된 경우 업데이트
 			// First publication with data
 			if (_baro.priority[uorb_index] == 0) {
 				int32_t priority = 0;
@@ -903,6 +916,7 @@ void VotedSensorsUpdate::baro_poll(vehicle_air_data_s &airdata)
 
 			_baro_device_id[uorb_index] = baro_report.device_id;
 
+			// vector 형태로 압력, 온도를 사용
 			got_update = true;
 			matrix::Vector3f vect(baro_report.pressure, baro_report.temperature, 0.f);
 
@@ -910,39 +924,45 @@ void VotedSensorsUpdate::baro_poll(vehicle_air_data_s &airdata)
 			_last_airdata[uorb_index].baro_temp_celcius = baro_report.temperature;
 			_last_airdata[uorb_index].baro_pressure_pa = corrected_pressure;
 
+			// best  baro 센서를 선택하기 위해서 voter에 넣기
 			_baro.voter.put(uorb_index, baro_report.timestamp, vect.data(), baro_report.error_count, _baro.priority[uorb_index]);
 		}
 	}
 
-	if (got_update) {
+	if (got_update) { // subscription 업데이트가 있었던 경우. best index가 이전과 바뀌었는지 체크하고 고도 계산
+		// best sensor 선정
 		int best_index;
 		_baro.voter.get_best(hrt_absolute_time(), &best_index);
 
 		if (best_index >= 0) {
 			airdata = _last_airdata[best_index];
 
+			// best로 선택된 것이 이전과 달라진 경우
 			if (_baro.last_best_vote != best_index) {
 				_baro.last_best_vote = (uint8_t)best_index;
 				_corrections.selected_baro_instance = (uint8_t)best_index;
 				_corrections_changed = true;
 			}
-
+			// best id가 이전과 달라진 경우
 			if (_selection.baro_device_id != _baro_device_id[best_index]) {
 				_selection_changed = true;
 				_selection.baro_device_id = _baro_device_id[best_index];
 			}
 
-			// calculate altitude using the hypsometric equation
+			// calculate altitude using the hypsometric equation (고도 측정 방정식을 사용해서 고도 계산하기 )
 
-			static constexpr float T1 = 15.0f - CONSTANTS_ABSOLUTE_NULL_CELSIUS;	/* temperature at base height in Kelvin */
-			static constexpr float a  = -6.5f / 1000.0f;	/* temperature gradient in degrees per metre */
+			static constexpr float T1 = 15.0f - CONSTANTS_ABSOLUTE_NULL_CELSIUS;	/* temperature at base height in Kelvin */ // 기초 고도에서의 온도
+			static constexpr float a  = -6.5f / 1000.0f;	/* temperature  in degrees per metre */ // 미터당 온도 변환
 
+			// 해수면 기준 압력. 단위 kPa로 변환
 			/* current pressure at MSL in kPa (QNH in hPa)*/
 			const float p1 = _parameters.baro_qnh * 0.1f;
 
+			// 측정한 압력. 단위 kPa로 변환
 			/* measured pressure in kPa */
 			const float p = airdata.baro_pressure_pa * 0.001f;
 
+			// 고도 구하는 공식. 단위는 m.
 			/*
 			 * Solve:
 			 *
@@ -955,32 +975,36 @@ void VotedSensorsUpdate::baro_poll(vehicle_air_data_s &airdata)
 			airdata.baro_alt_meter = (((powf((p / p1), (-(a * CONSTANTS_AIR_GAS_CONST) / CONSTANTS_ONE_G))) * T1) - T1) / a;
 
 
+			// 공기 밀도 계산. 대기가 일반적으로 20도라고 가정하고 공기 밀도 계산. rho가 공기 밀도를 뜻함.
+			// 추후에는 대기중 온도를 대입해서 rho를 구하면 좀더 정확한 추정이 가능하다고 소개.
 			// calculate air density
 			// estimate air density assuming typical 20degC ambient temperature
 			// TODO: use air temperature if available (differential pressure sensors)
 			static constexpr float pressure_to_density = 1.0f / (CONSTANTS_AIR_GAS_CONST * (20.0f -
-					CONSTANTS_ABSOLUTE_NULL_CELSIUS));
+					CONSTANTS_ABSOLUTE_NULL_CELSIUS)); // 밀도에 대한 압력
 			airdata.rho = pressure_to_density * airdata.baro_pressure_pa;
 		}
 	}
 }
 
-//인자로 받은 센서의, failover count를 검사
+//인자로 받은 센서에 대해서 failover count를 검사. failover 관련 정보는 voter가 알려줌.
+// failover가 발생한 경우 subsystem 정보를 publish 하는 것이 목적
 bool VotedSensorsUpdate::check_failover(SensorData &sensor, const char *sensor_name, const uint64_t type)
 {
+	// 이전 failover_count가 달라졌다면 failover가 발생한 것으로 간주
 	if (sensor.last_failover_count != sensor.voter.failover_count() && !_hil_enabled) {
 		// failover flag와 index 살펴보기
 		uint32_t flags = sensor.voter.failover_state();
-		int failover_index = sensor.voter.failover_index();
+		int failover_index = sensor.voter.failover_index(); //fail이 된 센서의 index
 
-		if (flags == DataValidator::ERROR_FLAG_NO_ERROR) {
+		if (flags == DataValidator::ERROR_FLAG_NO_ERROR) { // 심각한 error가 아닌 경우. 전환된 센서 정보 출력
 			if (failover_index != -1) {
 				//we switched due to a non-critical reason. No need to panic.
 				PX4_INFO("%s sensor switch from #%i", sensor_name, failover_index);
 			}
 
 		} else { //flag가 error 상황 
-			if (failover_index != -1) {
+			if (failover_index != -1) { // mavlink로 Error 상황을 알림
 				mavlink_log_emergency(&_mavlink_log_pub, "%s #%i fail: %s%s%s%s%s!",
 						      sensor_name,
 						      failover_index,
@@ -989,7 +1013,7 @@ bool VotedSensorsUpdate::check_failover(SensorData &sensor, const char *sensor_n
 						      ((flags & DataValidator::ERROR_FLAG_TIMEOUT) ? " TIMEOUT" : ""),
 						      ((flags & DataValidator::ERROR_FLAG_HIGH_ERRCOUNT) ? " ERR CNT" : ""),
 						      ((flags & DataValidator::ERROR_FLAG_HIGH_ERRDENSITY) ? " ERR DNST" : ""));
-				// fail 센서의 우선순위를 낮추기
+				// fail 센서의 우선순위를 가장 낮은 값으로 설정. fail 정보 출력
 				// reduce priority of failed sensor to the minimum
 				sensor.priority[failover_index] = 1;
 
@@ -999,13 +1023,13 @@ bool VotedSensorsUpdate::check_failover(SensorData &sensor, const char *sensor_n
 
 				// 우선순위가 최소 1보다 커야 유효한 센서로 인정해서 count 증가
 				for (uint8_t i = 0; i < sensor.subscription_count; i++) {
-					if (sensor.priority[i] > 1) { ctr_valid++; }
+					if (sensor.priority[i] > 1) { ctr_valid++; } // faiover가 난 index를 1로 설정했기 때문에, 1 이상인 우선순위를 가지는 경우가 유효한 센서가 됨
 
 					PX4_WARN("Remaining sensors after failover event %u: %s #%u priority: %u", failover_index, sensor_name, i,
 						 sensor.priority[i]);
 				}
 
-				// 2개 이하인 경우
+				// 유효한 센서가 2개 이하인 경우
 				if (ctr_valid < 2) {
 					if (ctr_valid == 0) { // 유효한 센서가 0개인 경우. primary 센서도 실패 상태!
 						// Zero valid sensors remain! Set even the primary sensor health to false
@@ -1023,9 +1047,9 @@ bool VotedSensorsUpdate::check_failover(SensorData &sensor, const char *sensor_n
 					_info.timestamp = hrt_absolute_time();
 					_info.present = true;
 					_info.enabled = true;
-					_info.ok = false;
+					_info.ok = false; //ok를 false로 하여 failover를 알림. _info.subsystem_type에 어떤 부분이 문제인지 추가
 
-					if (_info_pub == nullptr) {
+					if (_info_pub == nullptr) { // publish가 아직 안만들어진 경우 publish queue에 넣고 바로 빠져나감
 						_info_pub = orb_advertise_queue(ORB_ID(subsystem_info), &_info, subsystem_info_s::ORB_QUEUE_LENGTH);
 
 					} else {
@@ -1035,7 +1059,7 @@ bool VotedSensorsUpdate::check_failover(SensorData &sensor, const char *sensor_n
 			}
 		}
 
-		sensor.last_failover_count = sensor.voter.failover_count();
+		sensor.last_failover_count = sensor.voter.failover_count(); // last failover_count를 업데이트
 		return true;
 	}
 
@@ -1171,6 +1195,7 @@ void VotedSensorsUpdate::sensors_poll(sensor_combined_s &raw, vehicle_air_data_s
 	}
 }
 
+// accel, gyro, mag, baro 센서에 대해서 failover가 발생한 경우 subsystem 정보와 함께 publish 하는 것이 목적
 void VotedSensorsUpdate::check_failover()
 {
 	check_failover(_accel, "Accel", subsystem_info_s::SUBSYSTEM_TYPE_ACC);
@@ -1179,6 +1204,7 @@ void VotedSensorsUpdate::check_failover()
 	check_failover(_baro, "Baro", subsystem_info_s::SUBSYSTEM_TYPE_ABSPRESSURE);
 }
 
+// 이전 timestamp와 현재 timestamp의 차이가 timestamp_relative 임
 void VotedSensorsUpdate::set_relative_timestamps(sensor_combined_s &raw)
 {
 	if (_last_accel_timestamp[_accel.last_best_vote]) {
@@ -1187,6 +1213,7 @@ void VotedSensorsUpdate::set_relative_timestamps(sensor_combined_s &raw)
 	}
 }
 
+//accel inconsistency 계산
 void
 VotedSensorsUpdate::calc_accel_inconsistency(sensor_preflight_s &preflt)
 {
@@ -1194,11 +1221,11 @@ VotedSensorsUpdate::calc_accel_inconsistency(sensor_preflight_s &preflt)
 	float accel_diff_sum_max_sq = 0.0f; // the maximum sum of axis differences squared
 	unsigned check_index = 0; // the number of sensors the primary has been checked against // primary와 비교해서 체크한 센서들의 수
 
-	// 각 센서 검사
+	// primary와 각 센서들과 검사하기
 	// Check each sensor against the primary
 	for (unsigned sensor_index = 0; sensor_index < _accel.subscription_count; sensor_index++) {
 
-		// 현재 검사하는 센서가 primary가 아니라는 것을 확인
+		// primary가 아닌 검사 대상 선정
 		// check that the sensor we are checking against is not the same as the primary
 		if ((_accel.priority[sensor_index] > 0) && (sensor_index != _accel.last_best_vote)) {
 
@@ -1248,7 +1275,7 @@ VotedSensorsUpdate::calc_accel_inconsistency(sensor_preflight_s &preflt)
 //gyro inconsistency 계산
 void VotedSensorsUpdate::calc_gyro_inconsistency(sensor_preflight_s &preflt)
 {
-	// 축에 대한 차이 제곱의 최대 합, primary 센서와 비교할 센서의 수
+	// 축에 대한 차이 제곱의 최대 합, primary 센서와 비교할 index
 	float gyro_diff_sum_max_sq = 0.0f; // the maximum sum of axis differences squared
 	unsigned check_index = 0; // the number of sensors the primary has been checked against
 
@@ -1290,7 +1317,7 @@ void VotedSensorsUpdate::calc_gyro_inconsistency(sensor_preflight_s &preflt)
 		}
 	}
 
-	// primary 밖에 없었던 경우에는 0으로 설정
+	// 1보다 작다는 것은 primary 밖에 없으므로 0으로 설정
 	// skip check if less than 2 sensors
 	if (check_index < 1) {
 		preflt.gyro_inconsistency_rad_s = 0.0f;
@@ -1301,19 +1328,24 @@ void VotedSensorsUpdate::calc_gyro_inconsistency(sensor_preflight_s &preflt)
 	}
 }
 
+//mag inconsistency 계산
 void VotedSensorsUpdate::calc_mag_inconsistency(sensor_preflight_s &preflt)
 {
+	// 축들에 대한 차이 제곱의 최대 합, primary 센서와 비교할 index
 	float mag_diff_sum_max_sq = 0.0f; // the maximum sum of axis differences squared
 	unsigned check_index = 0; // the number of sensors the primary has been checked against
 
+	// primary와 각 센서들 검사
 	// Check each sensor against the primary
 	for (unsigned sensor_index = 0; sensor_index < _mag.subscription_count; sensor_index++) {
 
+		// primary가 아닌 센서 선정
 		// check that the sensor we are checking against is not the same as the primary
 		if ((_mag.priority[sensor_index] > 0) && (sensor_index != _mag.last_best_vote)) {
 
 			float mag_diff_sum_sq = 0.0f; // sum of differences squared for a single sensor comparison against the primary
 
+			// primary와 선택된 센서에 대해서 mag_diff_sum_sq 계산
 			// calculate mag_diff_sum_sq for the specified sensor against the primary
 			for (unsigned axis_index = 0; axis_index < 3; axis_index++) {
 				_mag_diff[axis_index][check_index] = 0.95f * _mag_diff[axis_index][check_index] + 0.05f *
@@ -1324,7 +1356,7 @@ void VotedSensorsUpdate::calc_mag_inconsistency(sensor_preflight_s &preflt)
 
 			}
 
-			// capture the largest sum value
+			// capture the largest sum value // 가장 합이 큰 값을 저장
 			if (mag_diff_sum_sq > mag_diff_sum_max_sq) {
 				mag_diff_sum_max_sq = mag_diff_sum_sq;
 
@@ -1334,6 +1366,7 @@ void VotedSensorsUpdate::calc_mag_inconsistency(sensor_preflight_s &preflt)
 			check_index++;
 		}
 
+		// 최대 검사할 갯수까지 했으면 loop 빠져나가기
 		// check to see if the maximum number of checks has been reached and break
 		if (check_index >= 2) {
 			break;
@@ -1341,11 +1374,12 @@ void VotedSensorsUpdate::calc_mag_inconsistency(sensor_preflight_s &preflt)
 		}
 	}
 
+	// 검사한 index가 1보다 작으면 primary 1개 밖에 없으므로 0이 됨.
 	// skip check if less than 2 sensors
 	if (check_index < 1) {
 		preflt.mag_inconsistency_ga = 0.0f;
 
-	} else {
+	} else { // priamry와 비교를 한 경우 이므로 preflt에 값을 넣어주고 나중에 publish 됨
 		// get the vector length of the largest difference and write to the combined sensor struct
 		preflt.mag_inconsistency_ga = sqrtf(mag_diff_sum_max_sq);
 	}
