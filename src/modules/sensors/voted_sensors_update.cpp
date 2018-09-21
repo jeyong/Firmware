@@ -613,8 +613,8 @@ void VotedSensorsUpdate::accel_poll(struct sensor_combined_s &raw)
 
 			if (accel_report.integral_dt != 0) {
 				/*
-				 * 다운샘플링이 선호되기 전에 드라이버에서 통합되는 데이터를 사용하기. 이렇게 해야 aliasing 에러가 줄어든다.
-				 * scale factor 에러와 온도 진도에 따른 offset에 대해서 raw 센서 데이터를 보정.
+				 * 다운샘플링 전에 드라이버에서 통합된 데이터를 사용하는 것이 더 나은 방법이다. 이렇게 해야 aliasing 에러가 줄어든다.
+				 * scale factor 에러와 온도 변화에 따른 offset에 raw 센서 데이터를 보정.
 				 * 센서 드라이버에서 수행. 입력 데이터의 필터렁이 필요한 경우 센서 드라이버에서 수행되며 다운샘플링 전이 좋다.
 				 * Using data that has been integrated in the driver before downsampling is preferred
 				 * becasue it reduces aliasing errors. Correct the raw sensor data for scale factor errors
@@ -622,7 +622,7 @@ void VotedSensorsUpdate::accel_poll(struct sensor_combined_s &raw)
 				 * data required is performed in the sensor driver, preferably before downsampling.
 				*/
 
-				// 보정을 수행하기 전에 속도 변화량을 가속도로 데이터로 변환 
+				// 보정을 수행하기 전에 속도 변화량을 가속도 데이터로 변환 
 				// convert the delta velocities to an equivalent acceleration before application of corrections
 				float dt_inv = 1.e6f / accel_report.integral_dt; // 속도에 대한 미분을 위해서 inverse dt를 미리 계산
 				accel_data = matrix::Vector3f(accel_report.x_integral * dt_inv, // x, y, z축 속도에 대해서 dt로 나눠주면 accel 정보를 가짐
