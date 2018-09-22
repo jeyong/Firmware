@@ -180,48 +180,56 @@ private:
 
 
 	/**
+	 * GPS 설정, GPS로 가는 통신 처리
 	 * Try to configure the GPS, handle outgoing communication to the GPS
 	 */
 	void config();
 
 	/**
+	 * UART의 baudrate 설정 (GPS와 통신 속도)
 	 * Set the baudrate of the UART to the GPS
 	 */
 	int set_baudrate(unsigned baud);
 
 	/**
+	 * GPS에게 reset 명령 보내기 
 	 * Send a reset command to the GPS
 	 */
 	void cmd_reset();
 
 	/**
+	 * gps 정보를 publish
 	 * Publish the gps struct
 	 */
 	void 				publish();
 
 	/**
+	 * staelliteInfo를 publish
 	 * Publish the satellite info
 	 */
 	void 				publishSatelliteInfo();
 
 	/**
+	 * 시리얼 장치에서 사용하는 poll에 대한 추상화
 	 * This is an abstraction for the poll on serial used.
 	 *
-	 * @param buf: pointer to read buffer
-	 * @param buf_length: size of read buffer
-	 * @param timeout: timeout in ms
-	 * @return: 0 for nothing read, or poll timed out
+	 * @param buf: pointer to read buffer // read 버퍼의 포인터
+	 * @param buf_length: size of read buffer // read 버퍼의 크기
+	 * @param timeout: timeout in ms // ms단위 timeout 시간
+	 * @return: 0 for nothing read, or poll timed out // 0 : 읽을 것이 없거나 timeout, 음수 : error, 양수 : 읽은 byte 수
 	 *	    < 0 for error
 	 *	    > 0 number of bytes read
 	 */
 	int pollOrRead(uint8_t *buf, size_t buf_length, int timeout);
 
 	/**
+	 * 새로운 inject data topic이 있는지 검사하고 이를 처리
 	 * check for new messages on the inject data topic & handle them
 	 */
 	void handleInjectDataTopic();
 
 	/**
+	 * data를 gps에 보내기 (RTCM stream)
 	 * send data to the device, such as an RTCM stream
 	 * @param data
 	 * @param len
@@ -229,6 +237,7 @@ private:
 	inline bool injectData(uint8_t *data, size_t len);
 
 	/**
+	 * baudrate 설정
 	 * set the Baudrate
 	 * @param baud
 	 * @return 0 on success, <0 on error
@@ -241,6 +250,7 @@ private:
 	static int callback(GPSCallbackType type, void *data1, int data2, void *user);
 
 	/**
+	 * msg_to_gps_device가 true이면 gps 장치로 메시지 보내고 false이면 gps에서 메시지를 받음
 	 * Dump gps communication.
 	 * @param data message
 	 * @param len length of the message
@@ -336,7 +346,7 @@ int GPS::callback(GPSCallbackType type, void *data1, int data2, void *user)
 	GPS *gps = (GPS *)user;
 
 	switch (type) {
-	case GPSCallbackType::readDeviceData: {
+	case GPSCallbackType::readDeviceData: { // gps에서 읽기고 size 반환
 			int num_read = gps->pollOrRead((uint8_t *)data1, data2, *((int *)data1));
 
 			if (num_read > 0) {
@@ -346,12 +356,12 @@ int GPS::callback(GPSCallbackType type, void *data1, int data2, void *user)
 			return num_read;
 		}
 
-	case GPSCallbackType::writeDeviceData:
+	case GPSCallbackType::writeDeviceData: // gps에 쓰기
 		gps->dumpGpsData((uint8_t *)data1, (size_t)data2, true);
 
 		return write(gps->_serial_fd, data1, (size_t)data2);
 
-	case GPSCallbackType::setBaudrate:
+	case GPSCallbackType::setBaudrate: //Baud rate 속도 설정
 		return gps->setBaudrate(data2);
 
 	case GPSCallbackType::gotRTCMMessage:
@@ -362,7 +372,7 @@ int GPS::callback(GPSCallbackType type, void *data1, int data2, void *user)
 		/* not used */
 		break;
 
-	case GPSCallbackType::setClock:
+	case GPSCallbackType::setClock: // 시간 설정
 		px4_clock_settime(CLOCK_REALTIME, (timespec *)data1);
 		break;
 	}
@@ -551,8 +561,10 @@ int GPS::setBaudrate(unsigned baud)
 	return 0;
 }
 
+// param에서 dump 정보에 따라 dump -> device, file -> dump
 void GPS::initializeCommunicationDump()
 {
+	//  1로 설정된 경우 모든 GPS 통신 데이터를 uORB로 publish하고 log 파일에 쓰기
 	param_t gps_dump_comm_ph = param_find("GPS_DUMP_COMM");
 	int32_t param_dump_comm;
 
@@ -576,27 +588,33 @@ void GPS::initializeCommunicationDump()
 	memset(_dump_from_device, 0, sizeof(gps_dump_s));
 
 	int instance;
+	// 충분히 큰 queue를 사용해야 메시지를 잃어버리는 일이 없음. logger rate를 증가
+	// _dump_from_device는 uORB로 보내는 dump
 	//make sure to use a large enough queue size, so that we don't lose messages. You may also want
 	//to increase the logger rate for that.
 	_dump_communication_pub = orb_advertise_multi_queue(ORB_ID(gps_dump), _dump_from_device, &instance,
 				  ORB_PRIO_DEFAULT, 8);
 }
 
+// GPS 데이터 dump를 publish
 void GPS::dumpGpsData(uint8_t *data, size_t len, bool msg_to_gps_device)
 {
 	if (!_dump_communication_pub) {
 		return;
 	}
 
+	// dump할 데이터 선택 (gps로 dump or gps로부터 dump)
 	gps_dump_s *dump_data = msg_to_gps_device ? _dump_to_device : _dump_from_device;
 
 	while (len > 0) {
 		size_t write_len = len;
 
+		// 쓸려고 하는 크기 > data 크기 - 길이
 		if (write_len > sizeof(dump_data->data) - dump_data->len) {
 			write_len = sizeof(dump_data->data) - dump_data->len;
 		}
 
+		// 
 		memcpy(dump_data->data + dump_data->len, data, write_len);
 		data += write_len;
 		dump_data->len += write_len;
@@ -618,6 +636,7 @@ void
 GPS::run()
 {
 	if (!_fake_gps) {
+		// serial 포트 열기 
 		/* open the serial port */
 		_serial_fd = ::open(_port, O_RDWR | O_NOCTTY);
 
@@ -629,6 +648,7 @@ GPS::run()
 
 	_orb_inject_data_fd = orb_subscribe(ORB_ID(gps_inject_data));
 
+	// 통신 dump 초기화
 	initializeCommunicationDump();
 
 	uint64_t last_rate_measurement = hrt_absolute_time();
