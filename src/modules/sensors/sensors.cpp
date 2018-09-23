@@ -761,7 +761,7 @@ Sensors::run()
 			}
 		}
 
-		// arm이 아닌 경우고 0.5초가 지난 경우. 
+		// arm이 아닌 경우고 0.5초가 지난 경우. ??
 		/* keep adding sensors as long as we are not armed,
 		 * when not adding sensors poll for param updates
 		 */

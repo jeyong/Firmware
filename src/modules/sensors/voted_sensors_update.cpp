@@ -527,7 +527,7 @@ void VotedSensorsUpdate::parameters_update()
 				int32_t mag_rot;
 				param_get(param_find(str), &mag_rot);
 
-				if (is_external) { // 외부에 있는 센서인 경우
+				if (is_external) { // 외부에 있는 센서인 경우 (GPS)
 
 					// 해당 mag 센서가 내부로 설정되어 있는 경우 처리
 					/* check if this mag is still set as internal, otherwise leave untouched */

@@ -375,7 +375,7 @@ RCUpdate::rc_poll(const ParameterHandles &parameter_handles)
 				_rc.channels[i] = 0.0f;
 			}
 
-			_rc.channels[i] *= _parameters.rev[i]; // rever 설정된 경우 적용
+			_rc.channels[i] *= _parameters.rev[i]; // reverse 설정된 경우 적용
 
 			/* handle any parameter-induced blowups */ // 채널 값으로 사용할 수 없는 값이 경우 0으로 처리
 			if (!PX4_ISFINITE(_rc.channels[i])) {
