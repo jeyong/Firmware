@@ -216,6 +216,9 @@ struct MPUReport {
 
 
 /*
+  MPU9250은 고속 버스와 interrupt status 레지스터를 처리할 수 있음.
+  다른 모든 register는 최대 1MHz로 통신. I2C는 400kHz, SPI는 1MHz.
+  더 빠른 통신이 필요한 경우, 센서와 interrupt register는 SPI로 20MHz로 읽기가 가능.
   The MPU9250 can only handle high bus speeds on the sensor and
   interrupt status registers. All other registers have a maximum 1MHz
   Communication with all registers of the device is performed using either
@@ -260,6 +263,7 @@ public:
 
 	void			print_registers();
 
+	// 테스트 목적으로 센서 에러 발생
 	// deliberately cause a sensor error
 	void 			test_error();
 
@@ -286,53 +290,55 @@ private:
 	 */
 	work_s			_work;
 #endif
+	// SPI의 경우 hrt 사용
 	bool 			_use_hrt;
 
 	struct hrt_call		_call;
 	unsigned		_call_interval;
 
-	ringbuffer::RingBuffer	*_accel_reports;
+	ringbuffer::RingBuffer	*_accel_reports; //accel ring 버퍼
 
-	struct accel_calibration_s	_accel_scale;
-	float			_accel_range_scale;
-	float			_accel_range_m_s2;
-	orb_advert_t		_accel_topic;
-	int			_accel_orb_class_instance;
-	int			_accel_class_instance;
+	struct accel_calibration_s	_accel_scale; // accel scale
+	float			_accel_range_scale;  // range scale 
+	float			_accel_range_m_s2;	// m/s^2
+	orb_advert_t		_accel_topic;	// accel topic
+	int			_accel_orb_class_instance;	// orb class instance
+	int			_accel_class_instance;	// class instance
 
-	ringbuffer::RingBuffer	*_gyro_reports;
+	ringbuffer::RingBuffer	*_gyro_reports; // gyro 버퍼
 
-	struct gyro_calibration_s	_gyro_scale;
-	float			_gyro_range_scale;
-	float			_gyro_range_rad_s;
+	struct gyro_calibration_s	_gyro_scale; //gyro scale
+	float			_gyro_range_scale;	// range scale
+	float			_gyro_range_rad_s;	// rad/s
 
-	unsigned		_dlpf_freq;
+	unsigned		_dlpf_freq;	// 
 
-	unsigned		_sample_rate;
-	perf_counter_t		_accel_reads;
-	perf_counter_t		_gyro_reads;
+	unsigned		_sample_rate;	//sample_rate
+	perf_counter_t		_accel_reads;	// accel read 횟수
+	perf_counter_t		_gyro_reads;	// gyro read 횟수
 	perf_counter_t		_sample_perf;
-	perf_counter_t		_bad_transfers;
-	perf_counter_t		_bad_registers;
-	perf_counter_t		_good_transfers;
-	perf_counter_t		_reset_retries;
-	perf_counter_t		_duplicates;
+	perf_counter_t		_bad_transfers;	// bad transfer 횟수
+	perf_counter_t		_bad_registers;	// bad register 횟수
+	perf_counter_t		_good_transfers;	// good transfer 횟수
+	perf_counter_t		_reset_retries;	// reset 횟수
+	perf_counter_t		_duplicates;	// 중복 횟수
 
-	uint8_t			_register_wait;
-	uint64_t		_reset_wait;
+	uint8_t			_register_wait; 	// register wait
+	uint64_t		_reset_wait;	//reset wait
 
-	math::LowPassFilter2p	_accel_filter_x;
-	math::LowPassFilter2p	_accel_filter_y;
-	math::LowPassFilter2p	_accel_filter_z;
-	math::LowPassFilter2p	_gyro_filter_x;
-	math::LowPassFilter2p	_gyro_filter_y;
-	math::LowPassFilter2p	_gyro_filter_z;
+	math::LowPassFilter2p	_accel_filter_x; //accel X축 필터
+	math::LowPassFilter2p	_accel_filter_y; //accel Y축 필터
+	math::LowPassFilter2p	_accel_filter_z; //accel Z축 필터
+	math::LowPassFilter2p	_gyro_filter_x; //gyro X축 필터
+	math::LowPassFilter2p	_gyro_filter_y; //gyro Y축 필터
+	math::LowPassFilter2p	_gyro_filter_z; //gyro Z축 필터
 
-	Integrator		_accel_int;
-	Integrator		_gyro_int;
+	Integrator		_accel_int;	// accel 통합
+	Integrator		_gyro_int;	// gyro 통합
 
 	enum Rotation		_rotation;
 
+	// 실시간으로 주요 설정 register를 검사 지원. SPI 버스 에러를 탐지하고 센서를 reset하기 위함.
 	// this is used to support runtime checking of key
 	// configuration registers to detect SPI bus errors and sensor
 	// reset
@@ -362,6 +368,7 @@ private:
 	void			stop();
 
 	/**
+	 * chip과 측정 범위를 reset하며 이때 scale과 offset은 변경하지 않음.
 	 * Reset chip.
 	 *
 	 * Resets the chip and measurements ranges, but not scale and offset.
@@ -370,6 +377,7 @@ private:
 
 
 	/**
+	 * main chip을 reset (mag를 해당없음)
 	 * Resets the main chip (excluding the magnetometer if any).
 	 */
 	int			reset_mpu();
@@ -410,6 +418,8 @@ private:
 
 
 	/**
+	 * hrt wrapper를 아직 만들지 않아서 static으로 선언.
+	 * 자동으로 polling하도록 설정한 경우 지정한 rate로 interrupt 형태로 HRT에서 호출.
 	 * Static trampoline from the hrt_call context; because we don't have a
 	 * generic hrt wrapper yet.
 	 *
@@ -421,11 +431,13 @@ private:
 	static void		measure_trampoline(void *arg);
 
 	/**
+	 * 센서로부터 측정 값을 가져와서 버퍼를 업데이트한다.
 	 * Fetch measurements from the sensor and update the report buffers.
 	 */
 	void			measure();
 
 	/**
+	 * mpu로부터 register를 읽는다.
 	 * Read a register from the mpu
 	 *
 	 * @param		The register to read.
@@ -435,6 +447,7 @@ private:
 	uint16_t		read_reg16(unsigned reg);
 
 	/**
+	 * mpu의 register에 쓰기
 	 * Write a register in the mpu
 	 *
 	 * @param reg		The register to write.
@@ -443,6 +456,7 @@ private:
 	void			write_reg(unsigned reg, uint8_t value);
 
 	/**
+	 * mpu에 있는 register 수정. register bits를 설정하기 전에 clear하기.
 	 * Modify a register in the mpu
 	 *
 	 * Bits are cleared before bits are set.
@@ -454,6 +468,7 @@ private:
 	void			modify_reg(unsigned reg, uint8_t clearbits, uint8_t setbits);
 
 	/**
+	 * mpu에서 register에 쓰고 _checked_values를 업데이트하기
 	 * Write a register in the mpu, updating _checked_values
 	 *
 	 * @param reg		The register to write.
@@ -462,6 +477,7 @@ private:
 	void			write_checked_reg(unsigned reg, uint8_t value);
 
 	/**
+	 * mpu에 있는 checked register를 수정
 	 * Modify a checked register in the mpu
 	 *
 	 * Bits are cleared before bits are set.
@@ -473,6 +489,7 @@ private:
 	void			modify_checked_reg(unsigned reg, uint8_t clearbits, uint8_t setbits);
 
 	/**
+	 * mpu 측정 범위를 설정
 	 * Set the mpu measurement range.
 	 *
 	 * @param max_g		The maximum G value the range must support.
@@ -481,6 +498,7 @@ private:
 	int			set_accel_range(unsigned max_g);
 
 	/**
+	 * mpu에서 읽은 16-bit 값을 native byte order로 변경
 	 * Swap a 16-bit value read from the mpu to native byte order.
 	 */
 	uint16_t		swap16(uint16_t val) { return (val >> 8) | (val << 8);	}
@@ -518,16 +536,19 @@ private:
 	int 			gyro_self_test();
 
 	/*
+	  로우패스필터의 freq를 설정
 	  set low pass filter frequency
 	 */
 	void _set_dlpf_filter(uint16_t frequency_hz);
 
 	/*
+	  sample rate를 설정 (1KHz ~ 5Hz)
 	  set sample rate (approximate) - 1kHz to 5Hz
 	*/
 	void _set_sample_rate(unsigned desired_sample_rate_hz);
 
 	/*
+	  주요 register들이 여전히 동일한 값을 가지고 있는지 검사
 	  check that key registers still have the right value
 	 */
 	void check_registers(void);

@@ -83,6 +83,8 @@
 #include "mpu9250.h"
 
 /*
+  timer interrupt를 설정할때 원하는 sample rate보다 약간더 빠르게 동작하도록 설정하고 accel 값 비교에 따른 중복을 제거.
+  이렇게 해서 줄인 시간은 다른 timer로 인해 생길 수 있는 timing jitter에 의한 지연을 대처하는게 충분하다.
   we set the timer interrupt to run a bit faster than the desired
   sample rate and then throw away duplicates by comparing
   accelerometer values. This time reduction is enough to cope with
@@ -90,9 +92,12 @@
  */
 #define MPU9250_TIMER_REDUCTION				200
 
+// accel 범위 설정
 /* Set accel range used */
 #define ACCEL_RANGE_G  16
 /*
+  check_registers()에서 검사하는 register의 목록.
+  MPUREG_PRODUCT_ID는 목록의 맨 앞에 둬야함.
   list of registers that will be checked in check_registers(). Note
   that MPUREG_PRODUCT_ID must be first in the list.
  */
@@ -260,6 +265,8 @@ MPU9250::init()
 #endif
 
 	/*
+	 * MPU가 I2C르 사용하는 경우 sample rate를 200Hz까지 줄여야 함.
+	 * integration autoreset을 더 빠르게 해서 sampling rate가 low으므로 sample을 itegrate 해야한다.
 	 * If the MPU is using I2C we should reduce the sample rate to 200Hz and
 	 * make the integration autoreset faster so that we integrate just one
 	 * sample since the sampling rate is already low.
@@ -278,7 +285,6 @@ MPU9250::init()
 	}
 
 	/* do init */
-
 	ret = CDev::init();
 
 	/* if init failed, bail now */
@@ -287,6 +293,7 @@ MPU9250::init()
 		return ret;
 	}
 
+	// accel report 버퍼 할당
 	/* allocate basic report buffers */
 	_accel_reports = new ringbuffer::RingBuffer(2, sizeof(accel_report));
 	ret = -ENOMEM;
@@ -295,17 +302,20 @@ MPU9250::init()
 		return ret;
 	}
 
+	// gyro report 버퍼 할당
 	_gyro_reports = new ringbuffer::RingBuffer(2, sizeof(gyro_report));
 
 	if (_gyro_reports == nullptr) {
 		return ret;
 	}
 
+	// reset mpu
 	if (reset_mpu() != OK) {
 		PX4_ERR("Exiting! Device failed to take initialization");
 		return ret;
 	}
 
+	// offset와 scale 초기화
 	/* Initialize offsets and scales */
 	_accel_scale.x_offset = 0;
 	_accel_scale.x_scale  = 1.0f;
@@ -321,6 +331,7 @@ MPU9250::init()
 	_gyro_scale.z_offset = 0;
 	_gyro_scale.z_scale  = 1.0f;
 
+	// 제어기를 위해 sw low pass filter 설정. param에서 cutoff 참조
 	// set software low pass filter for controllers
 	param_t accel_cut_ph = param_find("IMU_ACCEL_CUTOFF");
 	float accel_cut = MPU9250_ACCEL_DEFAULT_DRIVER_FILTER_FREQ;
@@ -350,6 +361,7 @@ MPU9250::init()
 		PX4_ERR("IMU_GYRO_CUTOFF param invalid");
 	}
 
+	// gyro node 초기화
 	/* do CDev init for the gyro device node, keep it optional */
 	ret = _gyro->init();
 
@@ -367,6 +379,7 @@ MPU9250::init()
 
 #endif /* USE_I2C */
 
+	// 9250이며 mag 초기화
 	/* do CDev init for the mag device node, keep it optional */
 	if (_whoami == MPU_WHOAMI_9250) {
 		ret = _mag->init();
@@ -388,15 +401,17 @@ MPU9250::init()
 		return ret;
 	}
 
-
+	// "/dev/accel" 
 	_accel_class_instance = register_class_devname(ACCEL_BASE_DEVICE_PATH);
 
 	measure();
 
+	// accel topic을 publish하기 위해서 accel report를 초기화
 	/* advertise sensor topic, measure manually to initialize valid report */
 	struct accel_report arp;
 	_accel_reports->get(&arp);
 
+	// report를 생성해서 publish
 	/* measurement will have generated a report, publish */
 	_accel_topic = orb_advertise_multi(ORB_ID(sensor_accel), &arp,
 					   &_accel_orb_class_instance, (is_external()) ? ORB_PRIO_MAX - 1 : ORB_PRIO_HIGH - 1);
@@ -406,6 +421,7 @@ MPU9250::init()
 		return ret;
 	}
 
+	// gyro topic을 publish하기 위해서 accel report를 초기화
 	/* advertise sensor topic, measure manually to initialize valid report */
 	struct gyro_report grp;
 	_gyro_reports->get(&grp);
@@ -421,6 +437,7 @@ MPU9250::init()
 	return ret;
 }
 
+// startup time : 최대 100 ms. 
 int MPU9250::reset()
 {
 	irqstate_t state;
@@ -434,6 +451,7 @@ int MPU9250::reset()
 
 	usleep(110000);
 
+	// 준비될때까지(100ms) sampling을 연기
 	// Hold off sampling until done (100 MS will be shortened)
 	state = px4_enter_critical_section();
 	_reset_wait = hrt_absolute_time() + 100000;
@@ -532,9 +550,11 @@ int MPU9250::reset_mpu()
 int
 MPU9250::probe()
 {
+	// device ID 찾기
 	/* look for device ID */
 	_whoami = read_reg(MPUREG_WHOAMI);
 
+	// product revision 검증
 	// verify product revision
 	switch (_whoami) {
 	case MPU_WHOAMI_9250:
@@ -551,6 +571,7 @@ MPU9250::probe()
 }
 
 /*
+  smaple rate를 설정 (1kHz ~ 5Hz). accel과 gyro에 대해서
   set sample rate (approximate) - 1kHz to 5Hz, for both accel and gyro
 */
 void
@@ -573,6 +594,7 @@ MPU9250::_set_sample_rate(unsigned desired_sample_rate_hz)
 }
 
 /*
+  Low Pass Filter의 freq 설정. accel과 gyro에 대해서
   set the DLPF filter frequency. This affects both accel and gyro.
  */
 void
@@ -580,6 +602,7 @@ MPU9250::_set_dlpf_filter(uint16_t frequency_hz)
 {
 	uint8_t filter;
 
+	// 다음으로 가장 높은 filter freq를 선택
 	/*
 	   choose next highest filter frequency available
 	 */
@@ -628,17 +651,20 @@ MPU9250::read(struct file *filp, char *buffer, size_t buflen)
 {
 	unsigned count = buflen / sizeof(accel_report);
 
+	// buffer는 반드시 충분히 커야 
 	/* buffer must be large enough */
 	if (count < 1) {
 		return -ENOSPC;
 	}
 
+	// 자동 측정이 활성화되어 있지 않다면 새로운 측정값을 buffer로 넣어야
 	/* if automatic measurement is not enabled, get a fresh measurement into the buffer */
 	if (_call_interval == 0) {
 		_accel_reports->flush();
 		measure();
 	}
 
+	// 만약 data가 없는 경우, error 상황
 	/* if no data, error (we could block here) */
 	if (_accel_reports->empty()) {
 		return -EAGAIN;
@@ -646,6 +672,7 @@ MPU9250::read(struct file *filp, char *buffer, size_t buflen)
 
 	perf_count(_accel_reads);
 
+	// buffer에서 읽어서 report로 복사.
 	/* copy reports out of our buffer to the caller */
 	accel_report *arp = reinterpret_cast<accel_report *>(buffer);
 	int transferred = 0;
@@ -659,6 +686,7 @@ MPU9250::read(struct file *filp, char *buffer, size_t buflen)
 		arp++;
 	}
 
+	// 전달할 최대 byte 수를 반환
 	/* return the number of bytes transferred */
 	return (transferred * sizeof(accel_report));
 }
@@ -734,6 +762,7 @@ MPU9250::gyro_self_test()
 }
 
 /*
+  의도적으로 복구 동작이 시작되도록 센서에서 error를 구동시킴.
   deliberately trigger an error in the sensor to trigger recovery
  */
 void
@@ -753,17 +782,20 @@ MPU9250::gyro_read(struct file *filp, char *buffer, size_t buflen)
 {
 	unsigned count = buflen / sizeof(gyro_report);
 
+	// 버퍼는 충분히 크게 
 	/* buffer must be large enough */
 	if (count < 1) {
 		return -ENOSPC;
 	}
 
+	// 자동 측정이 활성화되어 있는 경우, 새로운 측정값을 buf로 넣기
 	/* if automatic measurement is not enabled, get a fresh measurement into the buffer */
 	if (_call_interval == 0) {
 		_gyro_reports->flush();
 		measure();
 	}
 
+	// data가 없으면 error
 	/* if no data, error (we could block here) */
 	if (_gyro_reports->empty()) {
 		return -EAGAIN;
@@ -771,6 +803,7 @@ MPU9250::gyro_read(struct file *filp, char *buffer, size_t buflen)
 
 	perf_count(_gyro_reads);
 
+	// buffer를 report로 복사해서 caller에 전달
 	/* copy reports out of our buffer to the caller */
 	gyro_report *grp = reinterpret_cast<gyro_report *>(buffer);
 	int transferred = 0;
@@ -784,6 +817,7 @@ MPU9250::gyro_read(struct file *filp, char *buffer, size_t buflen)
 		grp++;
 	}
 
+	// 전송할 byte의 수 반환
 	/* return the number of bytes transferred */
 	return (transferred * sizeof(gyro_report));
 }
@@ -793,47 +827,49 @@ MPU9250::ioctl(struct file *filp, int cmd, unsigned long arg)
 {
 	switch (cmd) {
 
-	case SENSORIOCRESET: {
+	case SENSORIOCRESET: { // 센서 reset
 			return reset();
 		}
 
-	case SENSORIOCSPOLLRATE: {
+	case SENSORIOCSPOLLRATE: { // 센서 poll rate 설정
 			switch (arg) {
 
-			/* switching to manual polling */
+			/* switching to manual polling */ // 수동 polling으로 전환
 			case SENSOR_POLLRATE_MANUAL:
 				stop();
 				_call_interval = 0;
 				return OK;
 
-			/* external signalling not supported */
+			/* external signalling not supported */ // 외부에서 신호 수신 지원 안함
 			case SENSOR_POLLRATE_EXTERNAL:
 
-			/* zero would be bad */
+			/* zero would be bad */ // 0이면 error 상황
 			case 0:
 				return -EINVAL;
 
-			/* set default/max polling rate */
-			case SENSOR_POLLRATE_MAX:
+			/* set default/max polling rate */ // 기본/최대 polling rate 설정
+			case SENSOR_POLLRATE_MAX: // 최대 polling rate
 				return ioctl(filp, SENSORIOCSPOLLRATE, 1000);
 
-			case SENSOR_POLLRATE_DEFAULT:
+			case SENSOR_POLLRATE_DEFAULT: // 기본 polling rate
 				return ioctl(filp, SENSORIOCSPOLLRATE, MPU9250_ACCEL_DEFAULT_RATE);
 
+			// polling interval을 조정 Hz 단위 
 			/* adjust to a legal polling interval in Hz */
 			default: {
-					/* do we need to start internal polling? */
+					/* do we need to start internal polling? */ // 내부 polling을 시작해야하는지
 					bool want_start = (_call_interval == 0);
 
-					/* convert hz to hrt interval via microseconds */
+					/* convert hz to hrt interval via microseconds */ // hz를 us 단위의 hrt interval로 변환
 					unsigned ticks = 1000000 / arg;
 
+					// 최대 rate 대비 적정한 rate인지 검사
 					/* check against maximum sane rate */
 					if (ticks < 1000) {
 						return -EINVAL;
 					}
 
-					// adjust filters
+					// adjust filters // filter 조정
 					float cutoff_freq_hz = _accel_filter_x.get_cutoff_freq();
 					float sample_rate = 1.0e6f / ticks;
 					_accel_filter_x.set_cutoff_frequency(sample_rate, cutoff_freq_hz);
@@ -846,11 +882,14 @@ MPU9250::ioctl(struct file *filp, int cmd, unsigned long arg)
 					_gyro_filter_y.set_cutoff_frequency(sample_rate, cutoff_freq_hz_gyro);
 					_gyro_filter_z.set_cutoff_frequency(sample_rate, cutoff_freq_hz_gyro);
 
+					// 다음 measurement에 대해서 interval을 조정. 
 					/* update interval for next measurement */
 					/* XXX this is a bit shady, but no other way to adjust... */
 					_call_interval = ticks;
 
 					/*
+					  sample time보다 interval을 더 빠르게 호출하도록 설정.
+					  중복 sample을 탐지하면 reject. stm32와 mpu9250 clock 사이에 beat때문에 aliasing을 방지.
 					  set call interval faster than the sample time. We
 					  then detect when we have duplicate samples and reject
 					  them. This prevents aliasing due to a beat between the
@@ -858,6 +897,7 @@ MPU9250::ioctl(struct file *filp, int cmd, unsigned long arg)
 					 */
 					_call.period = _call_interval - MPU9250_TIMER_REDUCTION;
 
+					// poll state machine을 시작해야한다면 start 호출
 					/* if we need to start the poll state machine, do it */
 					if (want_start) {
 						start();
@@ -868,14 +908,14 @@ MPU9250::ioctl(struct file *filp, int cmd, unsigned long arg)
 			}
 		}
 
-	case SENSORIOCGPOLLRATE:
+	case SENSORIOCGPOLLRATE: // poll rate 
 		if (_call_interval == 0) {
 			return SENSOR_POLLRATE_MANUAL;
 		}
 
 		return 1000000 / _call_interval;
 
-	case SENSORIOCSQUEUEDEPTH: {
+	case SENSORIOCSQUEUEDEPTH: { // 
 			/* lower bound is mandatory, upper bound is a sanity check */
 			if ((arg < 1) || (arg > 100)) {
 				return -EINVAL;
@@ -893,14 +933,14 @@ MPU9250::ioctl(struct file *filp, int cmd, unsigned long arg)
 			return OK;
 		}
 
-	case ACCELIOCGSAMPLERATE:
+	case ACCELIOCGSAMPLERATE: // accel sample rate get
 		return _sample_rate;
 
-	case ACCELIOCSSAMPLERATE:
+	case ACCELIOCSSAMPLERATE: // accel sample rate set
 		_set_sample_rate(arg);
 		return OK;
 
-	case ACCELIOCSSCALE: {
+	case ACCELIOCSSCALE: { // accel scale set 
 			/* copy scale, but only if off by a few percent */
 			struct accel_calibration_s *s = (struct accel_calibration_s *) arg;
 			float sum = s->x_scale + s->y_scale + s->z_scale;
@@ -914,18 +954,18 @@ MPU9250::ioctl(struct file *filp, int cmd, unsigned long arg)
 			}
 		}
 
-	case ACCELIOCGSCALE:
+	case ACCELIOCGSCALE: // accel scale get
 		/* copy scale out */
 		memcpy((struct accel_calibration_s *) arg, &_accel_scale, sizeof(_accel_scale));
 		return OK;
 
-	case ACCELIOCSRANGE:
+	case ACCELIOCSRANGE: // accel range set
 		return set_accel_range(arg);
 
-	case ACCELIOCGRANGE:
+	case ACCELIOCGRANGE: // accel range get 
 		return (unsigned long)((_accel_range_m_s2) / CONSTANTS_ONE_G + 0.5f);
 
-	case ACCELIOCSELFTEST:
+	case ACCELIOCSELFTEST: // accel self-test set
 		return accel_self_test();
 
 	default:
@@ -1100,15 +1140,18 @@ MPU9250::set_accel_range(unsigned max_g_in)
 void
 MPU9250::start()
 {
+	// 이미 시작하고 있는 경우 stop 시키기
 	/* make sure we are stopped first */
 	stop();
 
+	// 버퍼에 남아 있던 data를 제거하기
 	/* discard any stale data in the buffers */
 	_accel_reports->flush();
 	_gyro_reports->flush();
 	_mag->_mag_reports->flush();
 
-	if (_use_hrt) {
+	if (_use_hrt) { //hrt 사용하는 경우
+		// 지정한 rate로 polling을 시작
 		/* start polling at the specified rate */
 		hrt_call_every(&_call,
 			       1000,
@@ -1127,7 +1170,7 @@ MPU9250::start()
 void
 MPU9250::stop()
 {
-	if (_use_hrt) {
+	if (_use_hrt) { // hrt로 동작하는 경우 hrt_cancle로 stop 시키기
 		hrt_cancel(&_call);
 
 	} else {
@@ -1241,6 +1284,7 @@ MPU9250::check_registers(void)
 	_checked_next = (_checked_next + 1) % MPU9250_NUM_CHECKED_REGISTERS;
 }
 
+// null data 검사
 bool MPU9250::check_null_data(uint32_t *data, uint8_t size)
 {
 	while (size--) {
@@ -1250,7 +1294,7 @@ bool MPU9250::check_null_data(uint32_t *data, uint8_t size)
 		}
 	}
 
-	// all zero data - probably a SPI bus error
+	// all zero data - probably a SPI bus error // 모두 zero 데이터인 경우 SPI 버스 error일 가능성 있음.
 	perf_count(_bad_transfers);
 	perf_end(_sample_perf);
 	// note that we don't call reset() here as a reset()
@@ -1260,9 +1304,11 @@ bool MPU9250::check_null_data(uint32_t *data, uint8_t size)
 	return true;
 }
 
+// 중복 검사
 bool MPU9250::check_duplicate(uint8_t *accel_data)
 {
 	/*
+	   중복 accel data 인지 보기. 새로운  
 	   see if this is duplicate accelerometer data. Note that we
 	   can't use the data ready interrupt status bit in the status
 	   register as that also goes high on new gyro data, and when
@@ -1308,6 +1354,7 @@ MPU9250::measure()
 	perf_begin(_sample_perf);
 
 	/*
+	 * MPU9250에서 측정값 전체 set을 가져오기
 	 * Fetch the full set of measurements from the MPU9250 in one pass.
 	 */
 	if (OK != _interface->read(MPU9250_SET_SPEED(MPUREG_INT_STATUS, MPU9250_HIGH_BUS_SPEED),
@@ -1317,8 +1364,10 @@ MPU9250::measure()
 		return;
 	}
 
+	// register를 검사
 	check_registers();
 
+	// 중복 검사
 	if (check_duplicate(&mpu_report.accel_x[0])) {
 		return;
 	}
@@ -1337,6 +1386,7 @@ MPU9250::measure()
 #endif
 
 	/*
+	 * big endian에서 littel endian을 변환하기
 	 * Convert from big to little endian
 	 */
 	report.accel_x = int16_t_from_bytes(mpu_report.accel_x);
@@ -1347,10 +1397,12 @@ MPU9250::measure()
 	report.gyro_y  = int16_t_from_bytes(mpu_report.gyro_y);
 	report.gyro_z  = int16_t_from_bytes(mpu_report.gyro_z);
 
+	// null data 여부 검사
 	if (check_null_data((uint32_t *)&report, sizeof(report) / 4)) {
 		return;
 	}
 
+	// 다시 sensor를 사용하기 전에 정상적인 전송을 위한 기다림. _good_transfers을 증가시키지만 아직 data를 반환하지 않음.
 	if (_register_wait != 0) {
 		// we are waiting for some good transfers before using the sensor again
 		// We still increment _good_transfers, but don't return any data yet
@@ -1359,6 +1411,7 @@ MPU9250::measure()
 	}
 
 	/*
+	 * 축을 바꾸고 
 	 * Swap axes and negate y
 	 */
 	int16_t accel_xt = report.accel_y;
@@ -1368,6 +1421,7 @@ MPU9250::measure()
 	int16_t gyro_yt = ((report.gyro_x == -32768) ? 32767 : -report.gyro_x);
 
 	/*
+	 * swap을 적용
 	 * Apply the swap
 	 */
 	report.accel_x = accel_xt;
@@ -1376,16 +1430,20 @@ MPU9250::measure()
 	report.gyro_y = gyro_yt;
 
 	/*
+	 * buf를 report하기
 	 * Report buffers.
 	 */
 	accel_report		arb;
 	gyro_report		grb;
 
 	/*
+	 * 결과를 m/s^2 하기 위해 조정 및 scale
 	 * Adjust and scale results to m/s^2.
 	 */
 	grb.timestamp = arb.timestamp = hrt_absolute_time();
 
+	// error count = bad transfer의 횟수 + bad register가 읽은 합.
+	// 상위 코드에서 sensor가 문제가 있는지를 결정하는데 사용.
 	// report the error count as the sum of the number of bad
 	// transfers and bad register reads. This allows the higher
 	// level code to decide if it should use this sensor based on
@@ -1393,20 +1451,26 @@ MPU9250::measure()
 	grb.error_count = arb.error_count = perf_event_count(_bad_transfers) + perf_event_count(_bad_registers);
 
 	/*
+	 * 1) raw 값을 스케일링해서 SI 단위로 만들기
+	 * 2) 고정 offset 값을 빼기 (SI 단위)
+	 * 3) 선형 동적 factor로 칼리브레이션한 값을 scale
 	 * 1) Scale raw value to SI units using scaling from datasheet.
 	 * 2) Subtract static offset (in SI units)
 	 * 3) Scale the statically calibrated values with a linear
 	 *    dynamically obtained factor
 	 *
+	 * Note: 고정 sensor offset은 'zero' 입력에서 sensor 출력되는 수. 따라서 offset을 빼줘야 함.
 	 * Note: the static sensor offset is the number the sensor outputs
 	 * 	 at a nominally 'zero' input. Therefore the offset has to
 	 * 	 be subtracted.
 	 *
+	 *   예제: gyro 출력은 0 각속도에서 74의 값을 출력. 따라서 offset은 74이므로 측정한 값에서 74를 빼준다.
 	 *	 Example: A gyro outputs a value of 74 at zero angular rate
 	 *	 	  the offset is 74 from the origin and subtracting
 	 *		  74 from all measurements centers them around zero.
 	 */
 
+	// NOTE: 축은 보드와 매치시키기 위해서 바꿔치기한다. 
 	/* NOTE: Axes have been swapped to match the board a few lines above. */
 
 	arb.x_raw = report.accel_x;
@@ -1417,6 +1481,7 @@ MPU9250::measure()
 	float yraw_f = report.accel_y;
 	float zraw_f = report.accel_z;
 
+	// 사용자 지정 rotation 적용
 	// apply user specified rotation
 	rotate_3f(_rotation, xraw_f, yraw_f, zraw_f);
 
@@ -1444,6 +1509,7 @@ MPU9250::measure()
 	arb.temperature_raw = report.temp;
 	arb.temperature = _last_temperature;
 
+	// device ID를 반환
 	/* return device ID */
 	arb.device_id = _device_id.devid;
 
@@ -1455,6 +1521,7 @@ MPU9250::measure()
 	yraw_f = report.gyro_y;
 	zraw_f = report.gyro_z;
 
+	// 사용자 지정 roation을 적용
 	// apply user specified rotation
 	rotate_3f(_rotation, xraw_f, yraw_f, zraw_f);
 
@@ -1480,12 +1547,14 @@ MPU9250::measure()
 	grb.temperature_raw = report.temp;
 	grb.temperature = _last_temperature;
 
+	// device ID를 반환
 	/* return device ID */
 	grb.device_id = _gyro->_device_id.devid;
 
 	_accel_reports->force(&arb);
 	_gyro_reports->force(&grb);
 
+	// data를 기다리는 쪽에다가 notify
 	/* notify anyone waiting for data */
 	if (accel_notify) {
 		poll_notify(POLLIN);

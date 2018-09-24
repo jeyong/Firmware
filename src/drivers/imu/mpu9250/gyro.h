@@ -36,6 +36,7 @@
 class MPU9250;
 
 /**
+ * gyro driver 노드 구현
  * Helper class implementing the gyro driver node.
  */
 class MPU9250_gyro : public device::CDev

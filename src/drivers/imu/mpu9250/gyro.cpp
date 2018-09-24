@@ -110,18 +110,20 @@ MPU9250_gyro::parent_poll_notify()
 	poll_notify(POLLIN);
 }
 
+// buflen만큼 읽어서 buffer에 넣기
 ssize_t
 MPU9250_gyro::read(struct file *filp, char *buffer, size_t buflen)
 {
 	return _parent->gyro_read(filp, buffer, buflen);
 }
 
+// arg에 따른 ioctl
 int
 MPU9250_gyro::ioctl(struct file *filp, int cmd, unsigned long arg)
 {
 
 	switch (cmd) {
-	case DEVIOCGDEVICEID:
+	case DEVIOCGDEVICEID: // device id를 반환
 		return (int)CDev::ioctl(filp, cmd, arg);
 		break;
 
