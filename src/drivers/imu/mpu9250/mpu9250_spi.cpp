@@ -181,6 +181,8 @@ MPU9250_SPI::write(unsigned reg_speed, void *data, unsigned count)
 	return transfer(&cmd[0], &cmd[0], count + 1);
 }
 
+// MPUReport의 data를 copy를 피하기를 원함 : 만약 caller가 buffer를 제공하면, reg나 reg16를 읽는다고 가정하고 
+// caller data나 명령에 받을 만큼 충분한 크기를 제공해야함.
 int
 MPU9250_SPI::read(unsigned reg_speed, void *data, unsigned count)
 {
@@ -195,28 +197,33 @@ MPU9250_SPI::read(unsigned reg_speed, void *data, unsigned count)
 
 
 	if (count < sizeof(MPUReport))  {
-
+		// 명령 추가
 		/* add command */
 
 		count++;
 	}
 
+	// bus freq를 설정
 	set_bus_frequency(reg_speed);
 
+	// 명령 설정
 	/* Set command */
 
 	pbuff[0] = reg_speed | DIR_READ ;
 
+	// 명령을 전송하고 data를 얻기
 	/* Transfer the command and get the data */
 
 	int ret = transfer(pbuff, pbuff, count);
 
 	if (ret == OK && pbuff == &cmd[0]) {
 
+		// count를 조정
 		/* Adjust the count back */
 
 		count--;
 
+		// data 반환
 		/* Return the data */
 
 		memcpy(data, &cmd[1], count);
