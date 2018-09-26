@@ -87,6 +87,7 @@ typedef device::Device *(*MPU9250_mag_constructor)(int, bool);
 
 
 /**
+ * mag driver node의 구현부
  * Helper class implementing the magnetometer driver node.
  */
 class MPU9250_mag : public device::CDev
@@ -150,6 +151,7 @@ private:
 
 	bool check_duplicate(uint8_t *mag_data);
 
+	// 중복 검출 목적으로 이전 mag data 저장
 	// keep last mag reading for duplicate detection
 	uint8_t			_last_mag_data[6];
 

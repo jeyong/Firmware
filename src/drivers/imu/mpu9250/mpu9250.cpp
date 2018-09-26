@@ -361,7 +361,7 @@ MPU9250::init()
 		PX4_ERR("IMU_GYRO_CUTOFF param invalid");
 	}
 
-	// gyro node 초기화
+	// gyro device node 초기화
 	/* do CDev init for the gyro device node, keep it optional */
 	ret = _gyro->init();
 
@@ -401,7 +401,7 @@ MPU9250::init()
 		return ret;
 	}
 
-	// "/dev/accel" 
+	// "/dev/accelx" 
 	_accel_class_instance = register_class_devname(ACCEL_BASE_DEVICE_PATH);
 
 	measure();
@@ -851,7 +851,7 @@ MPU9250::ioctl(struct file *filp, int cmd, unsigned long arg)
 			case SENSOR_POLLRATE_MAX: // 최대 polling rate
 				return ioctl(filp, SENSORIOCSPOLLRATE, 1000);
 
-			case SENSOR_POLLRATE_DEFAULT: // 기본 polling rate
+			case SENSOR_POLLRATE_DEFAULT: // 기본 polling rate // 1000 Hz로 설정
 				return ioctl(filp, SENSORIOCSPOLLRATE, MPU9250_ACCEL_DEFAULT_RATE);
 
 			// polling interval을 조정 Hz 단위 
@@ -865,7 +865,7 @@ MPU9250::ioctl(struct file *filp, int cmd, unsigned long arg)
 
 					// 최대 rate 대비 적정한 rate인지 검사
 					/* check against maximum sane rate */
-					if (ticks < 1000) {
+					if (ticks < 1000) { // 1ms보다 작은 경우 그냥 return
 						return -EINVAL;
 					}
 
@@ -1225,6 +1225,9 @@ MPU9250::measure_trampoline(void *arg)
 	dev->measure();
 }
 
+// 최대 속도로 register 읽기.(high speed register로 등록되어 있지 않더라도)
+// 일부 register에 대해서 낮은 속도로 되어 있는 것은 센서 설정을 변경하는데 지연시간이 필요하기 때문이다.
+// data register를 읽는 것과 같이 동일한 속도로 읽기 위해서 SPI bus healty를 테스트하는 것이 좋다.
 void
 MPU9250::check_registers(void)
 {
@@ -1244,6 +1247,8 @@ MPU9250::check_registers(void)
 		_checked_bad[_checked_next] = v;
 
 		/*
+		  이상한 값을 가져오는 경우 SPI bus나 센서가 문제가 있다는 것을 알 수 있음.
+		  _register_wait을 20으로 설정하고 센서가 다시 OK상태로 되기 전에 20 값을 볼 수 있을때까지 대기. 
 		  if we get the wrong value then we know the SPI bus
 		  or sensor is very sick. We set _register_wait to 20
 		  and wait until we have seen 20 good values in a row
@@ -1252,6 +1257,8 @@ MPU9250::check_registers(void)
 		perf_count(_bad_registers);
 
 		/*
+		  bad register 값을 고쳐지도록 하자.
+		  고장난 센서가 bus를 차지하는 것을 막기 위해서 loop마다 한 번 fix 작업 수행.
 		  try to fix the bad register value. We only try to
 		  fix one per loop to prevent a bad sensor hogging the
 		  bus.
@@ -1330,6 +1337,7 @@ bool MPU9250::check_duplicate(uint8_t *accel_data)
 	return _got_duplicate;
 }
 
+//gyro, accel, mag 읽어서 
 void
 MPU9250::measure()
 {

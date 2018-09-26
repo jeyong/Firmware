@@ -115,6 +115,7 @@ namespace mpu9250
   list of supported bus configurations
  */
 
+//IMU9250 관련 시스템애서 사용하는 bus 설정
 struct mpu9250_bus_option {
 	enum MPU9250_BUS busid;
 	const char *accelpath;
@@ -181,6 +182,8 @@ struct mpu9250_bus_option &find_bus(enum MPU9250_BUS busid)
 }
 
 /**
+ * 지정한 bus option에 따라 driver를 구동시키기.
+ * SPI interface, MPU9250 class의 instance는 bus_options[]에서 관리하도록 함.
  * start driver for a specific bus option
  */
 bool
@@ -193,6 +196,7 @@ start_bus(struct mpu9250_bus_option &bus, enum Rotation rotation, bool external)
 		return false;
 	}
 
+	// interface는 SPI
 	device::Device *interface = bus.interface_constructor(bus.busnum, bus.address, external);
 
 	if (interface == nullptr) {
@@ -209,6 +213,7 @@ start_bus(struct mpu9250_bus_option &bus, enum Rotation rotation, bool external)
 	device::Device *mag_interface = nullptr;
 
 #ifdef USE_I2C
+	//여기 들어오는지 테스트
 	/* For i2c interfaces, connect to the magnetomer directly */
 	bool is_i2c = bus.busid == MPU9250_BUS_I2C_INTERNAL || bus.busid == MPU9250_BUS_I2C_EXTERNAL;
 
@@ -229,6 +234,7 @@ start_bus(struct mpu9250_bus_option &bus, enum Rotation rotation, bool external)
 		goto fail;
 	}
 
+	// accel을 poll하기 위한 open. poll rate는 Default로 설정
 	/* set the poll rate to default, starts automatic data collection */
 	fd = open(bus.accelpath, O_RDONLY);
 
@@ -260,6 +266,7 @@ fail:
 }
 
 /**
+ * driver를 구동시키는 진입 부분. start_bus()에서 interface 및 MPU9250 obj 생성
  * Start the driver.
  *
  * This function only returns if the driver is up and running

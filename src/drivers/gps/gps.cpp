@@ -145,37 +145,38 @@ public:
 
 private:
 
-	int				_serial_fd;					///< serial interface to GPS
-	unsigned			_baudrate;					///< current baudrate
-	char				_port[20];					///< device / serial port path
-	bool				_healthy;					///< flag to signal if the GPS is ok
-	bool				_baudrate_changed;				///< flag to signal that the baudrate with the GPS has changed
-	bool				_mode_changed;					///< flag that the GPS mode has changed
-	bool        			_mode_auto;					///< if true, auto-detect which GPS is attached
-	gps_driver_mode_t		_mode;						///< current mode
-	GPSHelper::Interface  _interface;   						///< interface
-	GPSHelper			*_helper;					///< instance of GPS parser
-	GPS_Sat_Info			*_sat_info;					///< instance of GPS sat info data object
-	struct vehicle_gps_position_s	_report_gps_pos;				///< uORB topic for gps position
-	orb_advert_t			_report_gps_pos_pub;				///< uORB pub for gps position
+	int				_serial_fd;					///< serial interface to GPS // GPS serial fd 
+	unsigned			_baudrate;					///< current baudrate // 현재 baudrate
+	char				_port[20];					///< device / serial port path // serial 포트 path
+	bool				_healthy;					///< flag to signal if the GPS is ok // GPS가 정상인지 여부
+	bool				_baudrate_changed;				///< flag to signal that the baudrate with the GPS has changed // GPS의 baudrate가 변했는지 여부를 나타내는 flag
+	bool				_mode_changed;					///< flag that the GPS mode has changed // GPS 모드가 변경되었는지 여부를 나타내는 flag
+	bool        			_mode_auto;					///< if true, auto-detect which GPS is attached // GPS 장착여부 자동 감지 
+	gps_driver_mode_t		_mode;						///< current mode // 현재 모드 (uBlox 모드 사용)
+	GPSHelper::Interface  _interface;   						///< interface // 인터페이스
+	GPSHelper			*_helper;					///< instance of GPS parser // GPS 파서 
+	GPS_Sat_Info			*_sat_info;					///< instance of GPS sat info data object // GPS sattelite 정보를 담고 있는 객체
+	struct vehicle_gps_position_s	_report_gps_pos;				///< uORB topic for gps position // gps position을 위한 uORB topic
+	orb_advert_t			_report_gps_pos_pub;				///< uORB pub for gps position // gps position을 uORB pub
 	int					_gps_orb_instance;				///< uORB multi-topic instance
-	struct satellite_info_s		*_p_report_sat_info;				///< pointer to uORB topic for satellite info
-	int					_gps_sat_orb_instance;				///< uORB multi-topic instance for satellite info
-	orb_advert_t			_report_sat_info_pub;				///< uORB pub for satellite info
-	float				_rate;						///< position update rate
-	float				_rate_rtcm_injection;				///< RTCM message injection rate
-	unsigned			_last_rate_rtcm_injection_count; 		///< counter for number of RTCM messages
+	struct satellite_info_s		*_p_report_sat_info;				///< pointer to uORB topic for satellite info // GPS satellite 정보를 위한 uORB topic에 대한 pointer
+	int					_gps_sat_orb_instance;				///< uORB multi-topic instance for satellite info // GPS satellite 정보를 위한 uORB instance
+	orb_advert_t			_report_sat_info_pub;				///< uORB pub for satellite info // GPS satellite 정보를 위한 uORB pub
+	float				_rate;						///< position update rate // position 정보를 업데이트하는 rate
+	float				_rate_rtcm_injection;				///< RTCM message injection rate //  RTCM 메시지 추가 rate
+	unsigned			_last_rate_rtcm_injection_count; 		///< counter for number of RTCM messages // RTCM 메시지의 횟수
 	bool				_fake_gps;					///< fake gps output
 	Instance 			_instance;
 
 	int _orb_inject_data_fd;
 
-	orb_advert_t _dump_communication_pub;			///< if non-null, dump communication
-	gps_dump_s *_dump_to_device;
-	gps_dump_s *_dump_from_device;
+	orb_advert_t _dump_communication_pub;			///< if non-null, dump communication // null이 아닌 경우 dump communication
+	gps_dump_s *_dump_to_device;   	// GPS로 보내는 데이터
+	gps_dump_s *_dump_from_device;  // GPS로부터 받은 데이터
 
 	static volatile bool _is_gps_main_advertised; ///< for the second gps we want to make sure that it gets instance 1
 	/// and thus we wait until the first one publishes at least one message.
+	// 2번째 gps는 instance 1을 가져야하므로 첫번째 gps가 최소한 하나의 메시지를 publish할때까지 기다리기
 	static volatile GPS *_secondary_instance;
 
 

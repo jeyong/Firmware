@@ -411,6 +411,7 @@ MPU9250_mag::self_test(void)
 	return 0;
 }
 
+// reg 값을 쓰기 
 void
 MPU9250_mag::set_passthrough(uint8_t reg, uint8_t size, uint8_t *out)
 {
@@ -431,12 +432,14 @@ MPU9250_mag::set_passthrough(uint8_t reg, uint8_t size, uint8_t *out)
 	_parent->write_reg(MPUREG_I2C_SLV0_CTRL, size | BIT_I2C_SLV0_EN);
 }
 
+//지정한 size만큼 읽어서 buf에 넣기
 void
 MPU9250_mag::read_block(uint8_t reg, uint8_t *val, uint8_t count)
 {
 	_parent->_interface->read(reg, val, count);
 }
 
+//지정한 size만큼 읽어서 buf에 넣기
 void
 MPU9250_mag::passthrough_read(uint8_t reg, uint8_t *buf, uint8_t size)
 {
@@ -446,6 +449,7 @@ MPU9250_mag::passthrough_read(uint8_t reg, uint8_t *buf, uint8_t size)
 	_parent->write_reg(MPUREG_I2C_SLV0_CTRL, 0); // disable new reads
 }
 
+// 1byte 읽기
 uint8_t
 MPU9250_mag::read_reg(unsigned int reg)
 {

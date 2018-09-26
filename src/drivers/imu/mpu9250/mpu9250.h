@@ -351,6 +351,7 @@ private:
 	// last temperature reading for print_info()
 	float			_last_temperature;
 
+	// 데이터가 null인지 중복인지 체크
 	bool check_null_data(uint32_t *data, uint8_t size);
 	bool check_duplicate(uint8_t *accel_data);
 	// keep last accel reading for duplicate detection
@@ -358,11 +359,13 @@ private:
 	bool			_got_duplicate;
 
 	/**
+	 * 측정 시작
 	 * Start automatic measurement.
 	 */
 	void			start();
 
 	/**
+	 * 측정 중지
 	 * Stop automatic measurement.
 	 */
 	void			stop();

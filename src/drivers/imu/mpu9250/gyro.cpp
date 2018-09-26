@@ -85,6 +85,7 @@ MPU9250_gyro::~MPU9250_gyro()
 	}
 }
 
+//base class의 init() 초기화. GYRO_BASE_DEVICE_PATH로 등록
 int
 MPU9250_gyro::init()
 {
@@ -123,7 +124,7 @@ MPU9250_gyro::ioctl(struct file *filp, int cmd, unsigned long arg)
 {
 
 	switch (cmd) {
-	case DEVIOCGDEVICEID: // device id를 반환
+	case DEVIOCGDEVICEID: // DevIocGetDeviceID device id를 반환
 		return (int)CDev::ioctl(filp, cmd, arg);
 		break;
 
