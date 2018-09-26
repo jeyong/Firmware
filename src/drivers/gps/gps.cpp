@@ -86,9 +86,9 @@
 #include "devices/src/ashtech.h"
 
 
-#define TIMEOUT_5HZ 500
-#define RATE_MEASUREMENT_PERIOD 5000000
-#define GPS_WAIT_BEFORE_READ	20		// ms, wait before reading to save read() calls
+#define TIMEOUT_5HZ 500 // 5Hz로 동작 
+#define RATE_MEASUREMENT_PERIOD 5000000 // 5초
+#define GPS_WAIT_BEFORE_READ	20		// ms, wait before reading to save read() calls // read() 호출이 정상적으로 동작하기 위해서 읽기 동작 전에 20ms 대기
 
 
 /* struct for dynamic allocation of satellite info data */
@@ -562,7 +562,7 @@ int GPS::setBaudrate(unsigned baud)
 	return 0;
 }
 
-// param에서 dump 정보에 따라 dump -> device, file -> dump
+// param에서 dump 정보에 따라 dump -> device, file -> dump, GPS로부터 받은 dump를 publish 준비
 void GPS::initializeCommunicationDump()
 {
 	//  1로 설정된 경우 모든 GPS 통신 데이터를 uORB로 publish하고 log 파일에 쓰기
@@ -639,7 +639,7 @@ GPS::run()
 	if (!_fake_gps) {
 		// serial 포트 열기 
 		/* open the serial port */
-		_serial_fd = ::open(_port, O_RDWR | O_NOCTTY);
+		_serial_fd = ::open(_port, O_RDWR | O_NOCTTY); // "/dev/ttyS3"
 
 		if (_serial_fd < 0) {
 			PX4_ERR("GPS: failed to open serial port: %s err: %d", _port, errno);
@@ -720,82 +720,87 @@ GPS::run()
 				break;
 			}
 
-
+			// Ashtech 드라이버는 실제 설정에 문제가 있어도 성공되었다고 나오는 문제 있음.
+			// MTK 드라이버는 테스트 제대로 안되었음.
+			// 현재 UBlox 드라이버만 제대로 테스트 되어 신뢰할 수 있음. 
 			/* the Ashtech driver lies about successful configuration and the
 			 * MTK driver is not well tested, so we really only trust the UBX
 			 * driver for an advance publication
 			 */
 			if (_helper && _helper->configure(_baudrate, GPSHelper::OutputMode::GPS) == 0) {
 
+				// report 초기화
 				/* reset report */
 				memset(&_report_gps_pos, 0, sizeof(_report_gps_pos));
 
 				if (_mode == GPS_DRIVER_MODE_UBX) {
-
+					// 여기 들어오는 경우 GPS가 정상적으로 검색된 상태로, 실제로 읽기 동작 전에 사용하는 변수들 초기화 수행
 					/* GPS is obviously detected successfully, reset statistics */
 					_helper->resetUpdateRates();
 				}
 
 				int helper_ret;
-
+				// 5Hz timeout 전에 읽기 성공한 경우
 				while ((helper_ret = _helper->receive(TIMEOUT_5HZ)) > 0 && !should_exit()) {
 
-					if (helper_ret & 1) {
+					if (helper_ret & 1) { // 정상적으로 읽어온 경우 publish()를 호출하여 정보를 publish 수행
 						publish();
 
 						last_rate_count++;
 					}
 
-					if (_p_report_sat_info && (helper_ret & 2)) {
+					if (_p_report_sat_info && (helper_ret & 2)) { // 2를 반환한 경우 satellite정보를 publish
 						publishSatelliteInfo();
 					}
 
+					// 5초마다 update rate를 측정 (RATE_MEASUREMENT_PERIOD는 5초로 설정)
 					/* measure update rate every 5 seconds */
 					if (hrt_absolute_time() - last_rate_measurement > RATE_MEASUREMENT_PERIOD) {
 						float dt = (float)((hrt_absolute_time() - last_rate_measurement)) / 1000000.0f;
 						_rate = last_rate_count / dt;
 						_rate_rtcm_injection = _last_rate_rtcm_injection_count / dt;
 						last_rate_measurement = hrt_absolute_time();
-						last_rate_count = 0;
-						_last_rate_rtcm_injection_count = 0;
-						_helper->storeUpdateRates();
-						_helper->resetUpdateRates();
+						last_rate_count = 0; // 새로 측정을 위한 변수 초기화
+						_last_rate_rtcm_injection_count = 0; // 새로 측정을 위한 변수 초기화
+						_helper->storeUpdateRates(); // 속도, 위치의 update rate를 저장
+						_helper->resetUpdateRates(); // 새로운 측정을 위한 사용변수들 초기화
 					}
 
-					if (!_healthy) {
+					if (!_healthy) { // 디버깅 목적으로 두었는데 현재는 처리 부분이 없음
 						// Helpful for debugging, but too verbose for normal ops
-//						const char *mode_str = "unknown";
-//
-//						switch (_mode) {
-//						case GPS_DRIVER_MODE_UBX:
-//							mode_str = "UBX";
-//							break;
-//
-//						case GPS_DRIVER_MODE_MTK:
-//							mode_str = "MTK";
-//							break;
-//
-//						case GPS_DRIVER_MODE_ASHTECH:
-//							mode_str = "ASHTECH";
-//							break;
-//
-//						default:
-//							break;
-//						}
-//
-//						PX4_WARN("module found: %s", mode_str);
+						//						const char *mode_str = "unknown";
+						//
+						//						switch (_mode) {
+						//						case GPS_DRIVER_MODE_UBX:
+						//							mode_str = "UBX";
+						//							break;
+						//
+						//						case GPS_DRIVER_MODE_MTK:
+						//							mode_str = "MTK";
+						//							break;
+						//
+						//						case GPS_DRIVER_MODE_ASHTECH:
+						//							mode_str = "ASHTECH";
+						//							break;
+						//
+						//						default:
+						//							break;
+						//						}
+						//
+						//						PX4_WARN("module found: %s", mode_str);
 						_healthy = true;
 					}
 				}
 
-				if (_healthy) {
+				if (_healthy) { // health 관련 변수 초기화
 					_healthy = false;
 					_rate = 0.0f;
 					_rate_rtcm_injection = 0.0f;
 				}
 			}
 
-			if (_mode_auto) {
+			// GPS의 경우 동적으로 연결 및 해제가 가능하고 다른 GPS 모델이 붙더라도 동작할 수 있게 매번 검사하도록 구현
+			if (_mode_auto) { // auto모드로 설정된 경우 다른 드라이버에 대해서도 주기적으로 체크
 				switch (_mode) {
 				case GPS_DRIVER_MODE_UBX:
 					_mode = GPS_DRIVER_MODE_MTK;
@@ -1121,18 +1126,18 @@ GPS *GPS::instantiate(int argc, char *argv[], Instance instance)
 	if (instance == Instance::Main) {
 		gps = new GPS(device_name, mode, interface, fake_gps, enable_sat_info, instance);
 
-		if (gps && device_name_secondary) {
+		if (gps && device_name_secondary) { // main이 정상적으로 생성되어야 secondary도 task_spawn되도록...
 			task_spawn(argc, argv, Instance::Secondary);
 			// wait until running
 			int i = 0;
 
-			do {
+			do { // secondary를 위해서 1초간 wait
 				/* wait up to 1s */
 				usleep(2500);
 
 			} while (!_secondary_instance && ++i < 400);
 
-			if (i == 400) {
+			if (i == 400) { // 1초 전에 끝나야 하는데 1초가 지난 경우
 				PX4_ERR("Timed out while waiting for thread to start");
 			}
 		}
