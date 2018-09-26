@@ -1264,10 +1264,12 @@ MPU9250::check_registers(void)
 		  bus.
 		 */
 		if (_register_wait == 0 || _checked_next == 0) {
+			// product_id가 잘못된 값이면 센서를 완전히 reset시킨다.
 			// if the product_id is wrong then reset the
 			// sensor completely
 			write_reg(MPUREG_PWR_MGMT_1, BIT_H_RESET);
 			write_reg(MPUREG_PWR_MGMT_2, MPU_CLK_SEL_AUTO);
+			// reset 후에 잠시 대기한다. 이후에 register 쓰기 혹은 이상한 상태에 있는 모든 register를 제대로 보정하고 mpu9250을 종료시킴. 
 			// after doing a reset we need to wait a long
 			// time before we do any other register writes
 			// or we will end up with the mpu9250 in a
@@ -1279,6 +1281,7 @@ MPU9250::check_registers(void)
 
 		} else {
 			write_reg(_checked_registers[_checked_next], _checked_values[_checked_next]);
+			// 센서가 복구되는 기회를 주기 위해서 register에 쓰기 전에 3ms 정도 대기
 			// waiting 3ms between register writes seems
 			// to raise the chance of the sensor
 			// recovering considerably
@@ -1300,10 +1303,12 @@ bool MPU9250::check_null_data(uint32_t *data, uint8_t size)
 			return false;
 		}
 	}
-
-	// all zero data - probably a SPI bus error // 모두 zero 데이터인 경우 SPI 버스 error일 가능성 있음.
+	// 모두 zero 데이터인 경우 SPI 버스 error일 가능성 있음.
+	// all zero data - probably a SPI bus error
 	perf_count(_bad_transfers);
 	perf_end(_sample_perf);
+	// 여기서 reset()을 호출하지 않음. reset()은 interrupt를 비활성화 시키는데 20ms 정도 기간이 걸림.
+	// 이런 경우 mpu9250에 문제가 있으면 FMU failure 상태가 됨.(20ms 동안 imu 데이터가 들어가지 않으므로 다른 센서가 정상이더라도 failure 상태)
 	// note that we don't call reset() here as a reset()
 	// costs 20ms with interrupts disabled. That means if
 	// the mpu9250 does go bad it would cause a FMU failure,
@@ -1315,7 +1320,9 @@ bool MPU9250::check_null_data(uint32_t *data, uint8_t size)
 bool MPU9250::check_duplicate(uint8_t *accel_data)
 {
 	/*
-	   중복 accel data 인지 보기. 새로운  
+	   accel data 중복 여부 검사.
+	   status register에 있는 data ready interrupt status bit을 사용할 수 없음(왜냐하면 새로운 gyro data가 들어오면 high로 되니까)
+	   BITS_DLPF_CFG_256HZ_NOLPF2을 설정한 경우 gyro를 8kHz로 샘플링을 하므로 실제로는 중복 accel data가 들어왔는데 새로운 data가 들어왔다고 착각할 수 있음.
 	   see if this is duplicate accelerometer data. Note that we
 	   can't use the data ready interrupt status bit in the status
 	   register as that also goes high on new gyro data, and when
@@ -1323,13 +1330,15 @@ bool MPU9250::check_duplicate(uint8_t *accel_data)
 	   sampled at 8kHz, so we would incorrectly think we have new
 	   data when we are in fact getting duplicate accelerometer data.
 	*/
+	// memcmp()의 경우 같은 경우 0을 return
 	if (!_got_duplicate && memcmp(accel_data, &_last_accel_data, sizeof(_last_accel_data)) == 0) {
+		// 이 경우 새로운 data가 아니므로 다음 timer를 기다림
 		// it isn't new data - wait for next timer
 		perf_end(_sample_perf);
 		perf_count(_duplicates);
 		_got_duplicate = true;
 
-	} else {
+	} else { //_got_duplicate or memcmp가 0인 경우
 		memcpy(&_last_accel_data, accel_data, sizeof(_last_accel_data));
 		_got_duplicate = false;
 	}
