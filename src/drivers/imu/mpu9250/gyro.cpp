@@ -100,11 +100,12 @@ MPU9250_gyro::init()
 		return ret;
 	}
 
-	_gyro_class_instance = register_class_devname(GYRO_BASE_DEVICE_PATH);
+	_gyro_class_instance = register_class_devname(GYRO_BASE_DEVICE_PATH); //"/dev/gyro"
 
 	return ret;
 }
 
+// gyro polling하는 쪽에다가 noti 주도록
 void
 MPU9250_gyro::parent_poll_notify()
 {
@@ -115,6 +116,7 @@ MPU9250_gyro::parent_poll_notify()
 ssize_t
 MPU9250_gyro::read(struct file *filp, char *buffer, size_t buflen)
 {
+	//MPU9250::gyro_read() 호출
 	return _parent->gyro_read(filp, buffer, buflen);
 }
 
@@ -128,7 +130,7 @@ MPU9250_gyro::ioctl(struct file *filp, int cmd, unsigned long arg)
 		return (int)CDev::ioctl(filp, cmd, arg);
 		break;
 
-	default:
+	default: // MPU9250::gyro_ioctl()
 		return _parent->gyro_ioctl(filp, cmd, arg);
 	}
 }

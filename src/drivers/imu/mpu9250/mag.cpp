@@ -214,7 +214,7 @@ MPU9250_mag::_measure(struct ak8963_regs data)
 	mrb.timestamp = hrt_absolute_time();
 	mrb.is_external = false;
 
-	/* http://www.plclive.com/uploads/allimg/160323/110R2G42-0.png
+	/* http://www.plclive.com/uploads/allimg/160323/110R2G42-0.png 그림 참고
 	 * Align axes - note the accel & gryo are also re-aligned so this
 	 *              doesn't look obvious with the datasheet
 	 */
