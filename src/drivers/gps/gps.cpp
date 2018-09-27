@@ -453,7 +453,7 @@ int GPS::pollOrRead(uint8_t *buf, size_t buf_length, int timeout)
 	return ::read(_serial_fd, buf, buf_length);
 #endif
 }
-// gps_inject_data를 subscribeㅏ여  
+// gps_inject_data를 subscribe하여  
 void GPS::handleInjectDataTopic()
 {
 	if (_orb_inject_data_fd == -1) {
@@ -489,7 +489,7 @@ bool GPS::injectData(uint8_t *data, size_t len)
 	dumpGpsData(data, len, true);
 
 	size_t written = ::write(_serial_fd, data, len);
-	::fsync(_serial_fd);
+	::fsync(_serial_fd); // 해당 fd로 system이 전송을 완료하거나 error가 발생한 경우에만 return을 받고 싶을 때. The fsync() function shall not return until the system has completed that action or until an error is detected.
 	return written == len;
 }
 

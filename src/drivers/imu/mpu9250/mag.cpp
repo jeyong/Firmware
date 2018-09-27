@@ -440,13 +440,15 @@ MPU9250_mag::read_block(uint8_t reg, uint8_t *val, uint8_t count)
 }
 
 //지정한 size만큼 읽어서 buf에 넣기
+// i2c 통신에서 FMU가 master가 되고 imu9250은 slave로 동작하는 mode.
+// Pass-Through Mode: The MPU-9250 directly connects the primary and auxiliary I2C buses together, allowing the system processor to directly communicate with any external sensors.
 void
 MPU9250_mag::passthrough_read(uint8_t reg, uint8_t *buf, uint8_t size)
 {
 	set_passthrough(reg, size);
-	usleep(25 + 25 * size); // wait for the value to be read from slave
+	usleep(25 + 25 * size); // wait for the value to be read from slave //slave로부터 읽기 모드로 대기
 	read_block(MPUREG_EXT_SENS_DATA_00, buf, size);
-	_parent->write_reg(MPUREG_I2C_SLV0_CTRL, 0); // disable new reads
+	_parent->write_reg(MPUREG_I2C_SLV0_CTRL, 0); // disable new reads // 읽고나면 새로 read 동작 안하도록
 }
 
 // 1byte 읽기
@@ -475,6 +477,7 @@ MPU9250_mag::ak8963_check_id(uint8_t &deviceid)
 }
 
 /*
+ * pass-through mode로 쓰기 동작
  * 400kHz I2C bus speed = 2.5us per bit = 25us per byte
  */
 void
