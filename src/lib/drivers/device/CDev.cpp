@@ -239,6 +239,7 @@ CDev::ioctl(file_t *filep, int cmd, unsigned long arg)
 
 	switch (cmd) {
 
+	// driver의 private data에 대해서 pointer를 가져오기
 	/* fetch a pointer to the driver's private data */
 	case DIOC_GETPRIV:
 		*(void **)(uintptr_t)arg = (void *)this;
@@ -272,11 +273,12 @@ CDev::poll(file_t *filep, px4_pollfd_struct_t *fds, bool setup)
 	int ret = PX4_OK;
 
 	/*
+	 * pollnotify()에 대해서 lock
 	 * Lock against pollnotify() (and possibly other callers)
 	 */
 	lock();
 
-	if (setup) {
+	if (setup) { //setup이 된 경우 subclass에 대해서 pollfd에 file pointer를 저장
 		/*
 		 * Save the file pointer in the pollfd for the subclass'
 		 * benefit.
@@ -285,6 +287,7 @@ CDev::poll(file_t *filep, px4_pollfd_struct_t *fds, bool setup)
 		DEVICE_DEBUG("CDev::poll: fds->priv = %p", filep);
 
 		/*
+		 * setup 요청을 처리 
 		 * Handle setup requests.
 		 */
 		ret = store_poll_waiter(fds);
@@ -292,12 +295,13 @@ CDev::poll(file_t *filep, px4_pollfd_struct_t *fds, bool setup)
 		if (ret == PX4_OK) {
 
 			/*
+			 * 즉시 poll noiti를 보내야만 하는지 여부를 검사. 
 			 * Check to see whether we should send a poll notification
 			 * immediately.
 			 */
 			fds->revents |= fds->events & poll_state(filep);
 
-			/* yes? post the notification */
+			/* yes? post the notification */ // noti 보내기
 			if (fds->revents != 0) {
 				px4_sem_post(fds->sem);
 			}
@@ -347,11 +351,13 @@ CDev::poll_notify_one(px4_pollfd_struct_t *fds, pollevent_t events)
 	px4_sem_getvalue(fds->sem, &value);
 #endif
 
+	// report한 event set을 업데이트
 	/* update the reported event set */
 	fds->revents |= fds->events & events;
 
 	DEVICE_DEBUG(" Events fds=%p %0x %0x %0x %d", fds, fds->revents, fds->events, events, value);
 
+	// 만약 원하는 state인 경우, waiter를 깨우기
 	/* if the state is now interesting, wake the waiter if it's still asleep */
 	/* XXX semcount check here is a vile hack; counting semphores should not be abused as cvars */
 	if ((fds->revents != 0) && (value <= 0)) {
@@ -367,6 +373,7 @@ CDev::poll_state(file_t *filep)
 	return 0;
 }
 
+// _pollset[]에 pollwaiter에 저장하기
 int
 CDev::store_poll_waiter(px4_pollfd_struct_t *fds)
 {
@@ -385,6 +392,7 @@ CDev::store_poll_waiter(px4_pollfd_struct_t *fds)
 		}
 	}
 
+	// slot에 공간이 없으면 pollset을 크기를 늘리기
 	/* No free slot found. Resize the pollset */
 
 	if (_max_pollwaiters >= 256 / 2) { //_max_pollwaiters is uint8_t
@@ -410,6 +418,7 @@ CDev::store_poll_waiter(px4_pollfd_struct_t *fds)
 	return PX4_OK;
 }
 
+//poll waiter를 제거
 int
 CDev::remove_poll_waiter(px4_pollfd_struct_t *fds)
 {

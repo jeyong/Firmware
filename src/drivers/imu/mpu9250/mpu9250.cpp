@@ -851,7 +851,7 @@ MPU9250::ioctl(struct file *filp, int cmd, unsigned long arg)
 			case SENSOR_POLLRATE_MAX: // 최대 polling rate
 				return ioctl(filp, SENSORIOCSPOLLRATE, 1000);
 
-			case SENSOR_POLLRATE_DEFAULT: // 기본 polling rate // 1000 Hz로 설정
+			case SENSOR_POLLRATE_DEFAULT: // 기본 polling rate // MPU9250_ACCEL_DEFAULT_RATE도 1000. 1000 Hz로 설정
 				return ioctl(filp, SENSORIOCSPOLLRATE, MPU9250_ACCEL_DEFAULT_RATE);
 
 			// polling interval을 조정 Hz 단위 

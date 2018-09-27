@@ -76,19 +76,23 @@ public:
 	virtual int	init();
 
 	/**
+	 * device의 open 처리
 	 * Handle an open of the device.
 	 *
+	 * 이 함수는 device의 모든 open에 대해서 호출됨. 기본 구현은 _open_count를 유지하고 항상 OK 반환.
 	 * This function is called for every open of the device. The default
 	 * implementation maintains _open_count and always returns OK.
 	 *
-	 * @param filep		Pointer to the NuttX file structure.
+	 * @param filep		Pointer to the NuttX file structure. // NuttX 파일 구조체에 대한 포인터
 	 * @return		OK if the open is allowed, -errno otherwise.
 	 */
 	virtual int	open(file_t *filep);
 
 	/**
+	 * device의 close에 대한 처리
 	 * Handle a close of the device.
 	 *
+	 * 기본 구현은 _open_count를 유지하며 0이 아닌한 OK를 반환
 	 * This function is called for every close of the device. The default
 	 * implementation maintains _open_count and returns OK as long as it is not zero.
 	 *
@@ -98,13 +102,14 @@ public:
 	virtual int	close(file_t *filep);
 
 	/**
+	 * device의 read 구현
 	 * Perform a read from the device.
 	 *
 	 * The default implementation returns -ENOSYS.
 	 *
-	 * @param filep		Pointer to the NuttX file structure.
-	 * @param buffer	Pointer to the buffer into which data should be placed.
-	 * @param buflen	The number of bytes to be read.
+	 * @param filep		Pointer to the NuttX file structure. // NuttX 파일 구조체에 대한 포인터
+	 * @param buffer	Pointer to the buffer into which data should be placed. // data가 들어가는 buffer에 대한 포인터
+	 * @param buflen	The number of bytes to be read. // 읽은 byte의 수
 	 * @return		The number of bytes read or -errno otherwise.
 	 */
 	virtual ssize_t	read(file_t *filep, char *buffer, size_t buflen);
@@ -134,27 +139,31 @@ public:
 	virtual off_t	seek(file_t *filep, off_t offset, int whence);
 
 	/**
+	 * ioctl 동작 구현
 	 * Perform an ioctl operation on the device.
 	 *
+	 * 기본 구현은 DIOC_GETPRIV 처리. 하위 class는 자기가 처리안하는 command에 대해서 기본 구현을 호출해야함.
 	 * The default implementation handles DIOC_GETPRIV, and otherwise
 	 * returns -ENOTTY. Subclasses should call the default implementation
 	 * for any command they do not handle themselves.
 	 *
-	 * @param filep		Pointer to the NuttX file structure.
-	 * @param cmd		The ioctl command value.
-	 * @param arg		The ioctl argument value.
+	 * @param filep		Pointer to the NuttX file structure. // NuttX 파일 구조체
+	 * @param cmd		The ioctl command value. //명령
+	 * @param arg		The ioctl argument value. // 인자
 	 * @return		OK on success, or -errno otherwise.
 	 */
 	virtual int	ioctl(file_t *filep, int cmd, unsigned long arg);
 
 	/**
+	 * poll setup/teardown 동작 수행
 	 * Perform a poll setup/teardown operation.
 	 *
+	 * 내부적인 처리로 일반적으로 override하지 말아야 함. 
 	 * This is handled internally and should not normally be overridden.
 	 *
-	 * @param filep		Pointer to the internal file structure.
-	 * @param fds		Poll descriptor being waited on.
-	 * @param setup		True if this is establishing a request, false if
+	 * @param filep		Pointer to the internal file structure. // 내부 파일 구조체에 대한 포인터
+	 * @param fds		Poll descriptor being waited on. // 대기하고 있는 Poll descriptor 
+	 * @param setup		True if this is establishing a request, false if // 요청이 성립되면 true 그 외에는 false
 	 *			it is being torn down.
 	 * @return		OK on success, or -errno otherwise.
 	 */
@@ -162,28 +171,33 @@ public:
 
 protected:
 	/**
+	 * 기본 cdev 파일 동작 테이블에 대한 table. clone devices를 등록하는데 유용.
 	 * Pointer to the default cdev file operations table; useful for
 	 * registering clone devices etc.
 	 */
 	static const px4_file_operations_t	fops;
 
 	/**
+	 * poll event에 대한 device 현재 상태를 검사
 	 * Check the current state of the device for poll events from the
 	 * perspective of the file.
 	 *
+	 * poll이 즉시 return해야하는지를 결정하는 setup이 되는 경우 이 함수는 기본 poll() 구현에서 호출됨. 
 	 * This function is called by the default poll() implementation when
 	 * a poll is set up to determine whether the poll should return immediately.
 	 *
 	 * The default implementation returns no events.
 	 *
-	 * @param filep		The file that's interested.
-	 * @return		The current set of poll events.
+	 * @param filep		The file that's interested. // 관심있는 file
+	 * @return		The current set of poll events. // 현재 poll event의 집합
 	 */
 	virtual pollevent_t poll_state(file_t *filep);
 
 	/**
+	 * 새로운 poll event들을 report
 	 * Report new poll events.
 	 *
+	 * 이 함수는 poll waiter가 원하는 경우, device 변경되는 경우 언제든 호출되어야 함. 
 	 * This function should be called anytime the state of the device changes
 	 * in a fashion that might be interesting to a poll waiter.
 	 *
@@ -192,27 +206,32 @@ protected:
 	virtual void	poll_notify(pollevent_t events);
 
 	/**
+	 * poll_notify의 내부 구현
 	 * Internal implementation of poll_notify.
 	 *
-	 * @param fds		A poll waiter to notify.
-	 * @param events	The event(s) to send to the waiter.
+	 * @param fds		A poll waiter to notify. // notify할 poll waiter
+	 * @param events	The event(s) to send to the waiter. // waiter에게 전달할 event
 	 */
 	virtual void	poll_notify_one(px4_pollfd_struct_t *fds, pollevent_t events);
 
 	/**
+	 * 처음 open하는 경우 noti
 	 * Notification of the first open.
 	 *
+	 * 이 함수는 device가 open될때 호출된다. driver lock은 해당 호출 동안 hold 상태가 된다.  
 	 * This function is called when the device open count transitions from zero
 	 * to one.  The driver lock is held for the duration of the call.
 	 *
+	 * 기본 구현에서는 OK 반환
 	 * The default implementation returns OK.
 	 *
-	 * @param filep		Pointer to the NuttX file structure.
-	 * @return		OK if the open should proceed, -errno otherwise.
+	 * @param filep		Pointer to the NuttX file structure // NuttX 파일 structure에 대한 pointer
+	 * @return		OK if the open should proceed, -errno otherwise. // open이 처리되면 OK
 	 */
 	virtual int	open_first(file_t *filep);
 
 	/**
+	 * 마지막 close시에 noti
 	 * Notification of the last close.
 	 *
 	 * This function is called when the device open count transitions from
@@ -226,11 +245,12 @@ protected:
 	virtual int	close_last(file_t *filep);
 
 	/**
+	 * class device 이름을 등록하고 자동으로 device class instance suffix를 추가.
 	 * Register a class device name, automatically adding device
 	 * class instance suffix if need be.
 	 *
 	 * @param class_devname   Device class name
-	 * @return class_instamce Class instance created, or -errno on failure
+	 * @return class_instamce Class instance created, or -errno on failure // 생성된 class instance
 	 */
 	virtual int register_class_devname(const char *class_devname);
 
@@ -252,10 +272,13 @@ protected:
 	const char	*get_devname() { return _devname; }
 
 	/**
+	 * driver lock을 가지기
 	 * Take the driver lock.
 	 *
+	 * 각 dirver instance는 자신의 lock/semaphore를 가짐.
 	 * Each driver instance has its own lock/semaphore.
 	 *
+	 * signal에 의해서 interrupt될 수 있음. 
 	 * Note that we must loop as the wait may be interrupted by a signal.
 	 *
 	 * Careful: lock() calls cannot be nested!
@@ -266,6 +289,7 @@ protected:
 	}
 
 	/**
+	 * driver lock 해제
 	 * Release the driver lock.
 	 */
 	void		unlock()
@@ -287,8 +311,10 @@ private:
 	px4_pollfd_struct_t	**_pollset{nullptr};
 
 	/**
+	 * slot에 pollwaiter를 저장하며ㅑ 나중에 찾을 수 있음.
 	 * Store a pollwaiter in a slot where we can find it later.
 	 *
+	 * pollset을 필요에 따라서 확장. driver locked을 가지고 호출해야만 함.
 	 * Expands the pollset as required.  Must be called with the driver locked.
 	 *
 	 * @return		OK, or -errno on error.
@@ -296,6 +322,7 @@ private:
 	int		store_poll_waiter(px4_pollfd_struct_t *fds);
 
 	/**
+	 * poll waiter 제거
 	 * Remove a poll waiter.
 	 *
 	 * @return		OK, or -errno on error.
