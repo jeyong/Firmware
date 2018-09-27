@@ -50,6 +50,9 @@
 #include <cstring>
 
 /**
+ * module의 startup 및 shutdown 하는 동안 race condition으로부터 보호.
+ * module instance마다 하나의 mutex를 둘 수 있지만 메모리 아끼기 위해서 single global mutex를 뒀다.
+ * 좋은 디자인은 아니지만 이거 가지고 뭐라고 하지말아 달라. module의 startup은 순차적으로 수행됨.
  * This mutex protects against race conditions during startup & shutdown of modules.
  * There could be one mutex per module instantiation, but to reduce the memory footprint
  * there is only a single global mutex. This sounds bad, but we actually don't expect
@@ -60,6 +63,13 @@ extern pthread_mutex_t px4_modules_mutex;
 /**
  ** class ModuleBase
  *
+ * module에 대한 base class
+ * 'start', 'stop', 'status' 명령과 같이 module에서 공통으로 제공하는 기능에 대한 구현부
+ * 현재 다중 instance를 지원하지 않음.
+ * 
+ * 이 class에서는 각 module 타입에 따라서 base class 내부에 static object를 가질 수 있게 하였고
+ * base class로부터 static method 호출이 가능.
+ * 
  * Base class for modules, implementing common functionality, such as 'start',
  * 'stop' and 'status' commands.
  * Currently does not support modules which allow multiple instances, such as
@@ -69,36 +79,44 @@ extern pthread_mutex_t px4_modules_mutex;
  * allows to have a static object in the base class that is different for
  * each module type, and call static methods from the base class.
  *
+ * 자식 class에서 필요한 method들 :
  * Required methods for a derived class:
  *
+ * 자기 thread에서 동작하는 경우
  * When running in its own thread:
 	static int task_spawn(int argc, char *argv[]) {
+		// startup method처럼 run_trampoline을 이용해서 px4_task_spawn_cmd() 호출
 		// call px4_task_spawn_cmd() with &run_trampoline as startup method
 		// optional: wait until _object is not null, which means the task got initialized (use a timeout)
 		// set _task_id and return 0
 		// on error return != 0 (and _task_id must be -1)
 	}
 	static T *instantiate(int argc, char *argv[]) {
+		// 새로운 thread 내부에서 호출 (run_trampoline())
+		// 새로운 object T를 생성
 		// this is called from within the new thread, from run_trampoline()
 		// parse the arguments
 		// create a new object T & return it
 		// or return nullptr on error
 	}
 	static int custom_command(int argc, char *argv[]) {
+		// custome command를 지원
 		// support for custom commands
 		// it none are supported, just do:
 		return print_usage("unrecognized command");
 	}
 	static int print_usage(const char *reason = nullptr) {
+		// 모듈 사용법 관련 정보 제공
 		// use the PRINT_MODULE_* methods...
 	}
- *
+ * 
+ * work queue로 동작하는 경우 
  * When running on the work queue:
  * - custom_command & print_usage as above
 	static int task_spawn(int argc, char *argv[]) {
 		// parse the arguments
 		// set _object (here or from the work_queue() callback)
-		// call work_queue() (with a custom cycle trampoline)
+		// call work_queue() (with a custom cycle trampoline) // work_queue() 호출
 		// optional: wait until _object is not null, which means the task got initialized (use a timeout)
 		// set _task_id to task_id_is_work_queue and return 0
 		// on error return != 0 (and _task_id must be -1)
@@ -141,10 +159,11 @@ public:
 	}
 
 	/**
+	 * 자신 thread로 실행되는 경우 px4_task_spawn_cmd()에 대한 entry point로 
 	 * Entry point for px4_task_spawn_cmd() if the module runs in its own thread.
-	 * It does:
-	 * - instantiate the object
-	 * - call run() on it to execute the main loop
+	 * It does: // 하는 일
+	 * - instantiate the object  // object의 instance 생성
+	 * - call run() on it to execute the main loop //  run() 실행
 	 * - cleanup: delete the object
 	 * @param argc start argument(s)
 	 * @param argv start argument(s)

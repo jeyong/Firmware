@@ -381,6 +381,7 @@ int GPS::callback(GPSCallbackType type, void *data1, int data2, void *user)
 	return 0;
 }
 
+// 
 int GPS::pollOrRead(uint8_t *buf, size_t buf_length, int timeout)
 {
 	handleInjectDataTopic();
@@ -389,6 +390,9 @@ int GPS::pollOrRead(uint8_t *buf, size_t buf_length, int timeout)
 
 	/* For non QURT, use the usual polling. */
 
+	// serial data를 polling. 하나의 thread에서 orb messaage도 처리해야 하므로, 동시에 시리얼과 orb로부터 polling을 수행.
+	// 이 2가지 polling은 서로 다른 매커니즘을 사용. (orb subscribe와 uart에서 수신)
+	// 최대 polling 구간을 두고 주기적으로 orb 메시지를 체크하는 방식 사용
 	//Poll only for the serial data. In the same thread we also need to handle orb messages,
 	//so ideally we would poll on both, the serial fd and orb subscription. Unfortunately the
 	//two pollings use different underlying mechanisms (at least under posix), which makes this
@@ -401,12 +405,18 @@ int GPS::pollOrRead(uint8_t *buf, size_t buf_length, int timeout)
 	fds[0].fd = _serial_fd;
 	fds[0].events = POLLIN;
 
+	// uart로 polling 하기
 	int ret = poll(fds, sizeof(fds) / sizeof(fds[0]), math::min(max_timeout, timeout));
 
 	if (ret > 0) {
+		// GPS에서 새로운 data가 있으면 이를 처리
 		/* if we have new data from GPS, go handle it */
 		if (fds[0].revents & POLLIN) {
 			/*
+			 * 여기 진입한 경우 polling을 통해서 데이터가 있는 상태,
+			 * 따라서 read() 호출에 시간이 많이 걸리므로 1-2 byte 정도 들어온 경우 바로 읽어들이지 않고 delay를 둔다.
+			 * 요청한 data가 온전히 온 경우에는 delay 없이 바로 읽기
+			 * 
 			 * We are here because poll says there is some data, so this
 			 * won't block even on a blocking device. But don't read immediately
 			 * by 1-2 bytes, wait for some more data to save expensive read() calls.
@@ -423,6 +433,7 @@ int GPS::pollOrRead(uint8_t *buf, size_t buf_length, int timeout)
 			}
 
 #else
+			// read() 호출 하기전에 시간 dealy를 둔다. read() 호출에 cost가 많이 드니까
 			usleep(GPS_WAIT_BEFORE_READ * 1000);
 #endif
 
@@ -442,7 +453,7 @@ int GPS::pollOrRead(uint8_t *buf, size_t buf_length, int timeout)
 	return ::read(_serial_fd, buf, buf_length);
 #endif
 }
-
+// gps_inject_data를 subscribeㅏ여  
 void GPS::handleInjectDataTopic()
 {
 	if (_orb_inject_data_fd == -1) {
@@ -458,7 +469,11 @@ void GPS::handleInjectDataTopic()
 			struct gps_inject_data_s msg;
 			orb_copy(ORB_ID(gps_inject_data), _orb_inject_data_fd, &msg);
 
-			/* Write the message to the gps device. Note that the message could be fragmented.
+			/* 
+			 * gps 장치로 메시지를 쓰기. 메시지가 조각으로 나뉘어져 있더라도 동작 중에는 그냥 gps 장치로 보내기.
+			 * 별도로 message를 온전한 상태로 만들 필요 없음. 
+			 * 즉 받은 조각 data 그대로 쓰기
+			 * Write the message to the gps device. Note that the message could be fragmented.
 			 * But as we don't write anywhere else to the device during operation, we don't
 			 * need to assemble the message first.
 			 */
@@ -565,7 +580,7 @@ int GPS::setBaudrate(unsigned baud)
 // param에서 dump 정보에 따라 dump -> device, file -> dump, GPS로부터 받은 dump를 publish 준비
 void GPS::initializeCommunicationDump()
 {
-	//  1로 설정된 경우 모든 GPS 통신 데이터를 uORB로 publish하고 log 파일에 쓰기
+	//  1로 설정된 경우 모든 GPS 통신 데이터를 uORB로 publish하고 log 파일로 저정할 수 있음
 	param_t gps_dump_comm_ph = param_find("GPS_DUMP_COMM");
 	int32_t param_dump_comm;
 
@@ -589,7 +604,7 @@ void GPS::initializeCommunicationDump()
 	memset(_dump_from_device, 0, sizeof(gps_dump_s));
 
 	int instance;
-	// 충분히 큰 queue를 사용해야 메시지를 잃어버리는 일이 없음. logger rate를 증가
+	// 충분히 큰 queue를 사용해야 메시지를 잃어버리는 일이 없으며 다른 방법으로는 logger rate 속도를 빨리하는 방법이 있음
 	// _dump_from_device는 uORB로 보내는 dump
 	//make sure to use a large enough queue size, so that we don't lose messages. You may also want
 	//to increase the logger rate for that.
@@ -600,11 +615,12 @@ void GPS::initializeCommunicationDump()
 // GPS 데이터 dump를 publish
 void GPS::dumpGpsData(uint8_t *data, size_t len, bool msg_to_gps_device)
 {
+	// dump 관련 param 설정이 안되어 있는 겨우 dump 데이터를 모으지 않음.
 	if (!_dump_communication_pub) {
 		return;
 	}
 
-	// dump할 데이터 선택 (gps로 dump or gps로부터 dump)
+	// dump할 데이터 선택 (gps로부터 받은 data or gps로 보낼 data 선택하기)
 	gps_dump_s *dump_data = msg_to_gps_device ? _dump_to_device : _dump_from_device;
 
 	while (len > 0) {
@@ -622,10 +638,11 @@ void GPS::dumpGpsData(uint8_t *data, size_t len, bool msg_to_gps_device)
 		len -= write_len;
 
 		if (dump_data->len >= sizeof(dump_data->data)) {
-			if (msg_to_gps_device) {
+			if (msg_to_gps_device) { // gps로 보내는 data인 경우 len의 맨 앞 비트를 '1'로 설정
 				dump_data->len |= 1 << 7;
 			}
 
+			// dump 데이터 publish 하기 
 			dump_data->timestamp = hrt_absolute_time();
 			orb_publish(ORB_ID(gps_dump), _dump_communication_pub, dump_data);
 			dump_data->len = 0;
@@ -727,6 +744,7 @@ GPS::run()
 			 * MTK driver is not well tested, so we really only trust the UBX
 			 * driver for an advance publication
 			 */
+			// UBloxDriver의 configure() 호출
 			if (_helper && _helper->configure(_baudrate, GPSHelper::OutputMode::GPS) == 0) {
 
 				// report 초기화
@@ -740,7 +758,7 @@ GPS::run()
 				}
 
 				int helper_ret;
-				// 5Hz timeout 전에 읽기 성공한 경우
+				// 5Hz timeout 전에 읽기 성공한 경우 // UBloxDriver의 receive() 호출
 				while ((helper_ret = _helper->receive(TIMEOUT_5HZ)) > 0 && !should_exit()) {
 
 					if (helper_ret & 1) { // 정상적으로 읽어온 경우 publish()를 호출하여 정보를 publish 수행
