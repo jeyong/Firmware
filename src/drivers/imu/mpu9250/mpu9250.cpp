@@ -1526,7 +1526,7 @@ MPU9250::measure()
 	arb.scaling = _accel_range_scale;
 	arb.range_m_s2 = _accel_range_m_s2;
 
-	_last_temperature = (report.temp) / 361.0f + 35.0f;
+	_last_temperature = (report.temp) / 361.0f + 35.0f; // 도씨
 
 	arb.temperature_raw = report.temp;
 	arb.temperature = _last_temperature;

@@ -384,6 +384,7 @@ int GPS::callback(GPSCallbackType type, void *data1, int data2, void *user)
 // 
 int GPS::pollOrRead(uint8_t *buf, size_t buf_length, int timeout)
 {
+	// mavlink로 받은 topic 처리
 	handleInjectDataTopic();
 
 #if !defined(__PX4_QURT)
@@ -436,7 +437,7 @@ int GPS::pollOrRead(uint8_t *buf, size_t buf_length, int timeout)
 			// read() 호출 하기전에 시간 dealy를 둔다. read() 호출에 cost가 많이 드니까
 			usleep(GPS_WAIT_BEFORE_READ * 1000);
 #endif
-
+			// 실제 uart로 읽는 부분
 			ret = ::read(_serial_fd, buf, buf_length);
 
 		} else {
@@ -453,7 +454,7 @@ int GPS::pollOrRead(uint8_t *buf, size_t buf_length, int timeout)
 	return ::read(_serial_fd, buf, buf_length);
 #endif
 }
-// gps_inject_data를 subscribe하여  
+// gps_inject_data를 subscribe하여 gps에게 전달
 void GPS::handleInjectDataTopic()
 {
 	if (_orb_inject_data_fd == -1) {
@@ -484,6 +485,7 @@ void GPS::handleInjectDataTopic()
 	} while (updated);
 }
 
+// gps 장치로 data 전달
 bool GPS::injectData(uint8_t *data, size_t len)
 {
 	dumpGpsData(data, len, true);
@@ -493,6 +495,7 @@ bool GPS::injectData(uint8_t *data, size_t len)
 	return written == len;
 }
 
+// uart 시리얼 장치 속도 설정
 int GPS::setBaudrate(unsigned baud)
 {
 	/* process baud rate */
@@ -520,12 +523,13 @@ int GPS::setBaudrate(unsigned baud)
 
 	int termios_state;
 
+	// uart에 대한 설정 정보 얻기 
 	/* fill the struct for the new configuration */
 	tcgetattr(_serial_fd, &uart_config);
 
 	/* properly configure the terminal (see also https://en.wikibooks.org/wiki/Serial_Programming/termios ) */
 
-	//
+	// 입력 관련 처리 끄기
 	// Input flags - Turn off input processing
 	//
 	// convert break to null byte, no CR to NL translation,
@@ -535,7 +539,7 @@ int GPS::setBaudrate(unsigned baud)
 	//
 	uart_config.c_iflag &= ~(IGNBRK | BRKINT | ICRNL |
 				 INLCR | PARMRK | INPCK | ISTRIP | IXON);
-	//
+	// 출력 관련 처리 끄기
 	// Output flags - Turn off output processing
 	//
 	// no CR to NL translation, no NL to CR-NL translation,
@@ -547,7 +551,7 @@ int GPS::setBaudrate(unsigned baud)
 	//                     ONOCR | ONOEOT| OFILL | OLCUC | OPOST);
 	uart_config.c_oflag = 0;
 
-	//
+	// newline 처리 끄기
 	// No line processing
 	//
 	// echo off, echo newline off, canonical mode off,
@@ -559,12 +563,12 @@ int GPS::setBaudrate(unsigned baud)
 	uart_config.c_cflag &= ~(CSTOPB | PARENB | CRTSCTS);
 
 	/* set baud rate */
-	if ((termios_state = cfsetispeed(&uart_config, speed)) < 0) {
+	if ((termios_state = cfsetispeed(&uart_config, speed)) < 0) { // input 속도
 		GPS_ERR("ERR: %d (cfsetispeed)", termios_state);
 		return -1;
 	}
 
-	if ((termios_state = cfsetospeed(&uart_config, speed)) < 0) {
+	if ((termios_state = cfsetospeed(&uart_config, speed)) < 0) { //output 속도
 		GPS_ERR("ERR: %d (cfsetospeed)", termios_state);
 		return -1;
 	}
@@ -1066,7 +1070,7 @@ GPS *GPS::instantiate(int argc, char *argv[])
 
 GPS *GPS::instantiate(int argc, char *argv[], Instance instance)
 {
-	const char *device_name = GPS_DEFAULT_UART_PORT;
+	const char *device_name = GPS_DEFAULT_UART_PORT; //"/dev/ttyS3"
 	const char *device_name_secondary = nullptr;
 	bool fake_gps = false;
 	bool enable_sat_info = false;
