@@ -204,6 +204,7 @@ start_bus(struct mpu9250_bus_option &bus, enum Rotation rotation, bool external)
 		return false;
 	}
 
+	// MPU9250_SPI.init()
 	if (interface->init() != OK) {
 		delete interface;
 		warnx("no device on bus %u", (unsigned)bus.busid);
@@ -275,7 +276,7 @@ fail:
 void
 start(enum MPU9250_BUS busid, enum Rotation rotation, bool external)
 {
-
+	// bus_options[]에 2개 mpu9250 들어가 있음. 
 	bool started = false;
 
 	for (unsigned i = 0; i < NUM_BUS_OPTIONS; i++) {
@@ -288,7 +289,7 @@ start(enum MPU9250_BUS busid, enum Rotation rotation, bool external)
 			// not the one that is asked for
 			continue;
 		}
-
+		// bus_option[]의 dev는 null이고 busid는 일치하는 경우
 		started |= start_bus(bus_options[i], rotation, external);
 	}
 

@@ -69,12 +69,13 @@
  * interrupt status registers. All other registers have a maximum 1MHz
  * SPI speed
  *
+ * 실제 동작은 10.5 Mhz, 11.250Mhz 정도로 동작 (HIGH Speed인 경우)
  * The Actual Value will be rounded down by the spi driver.
  * for a 168Mhz CPU this will be 10.5 Mhz and for a 180 Mhz CPU
  * it will be 11.250 Mhz
  */
-#define MPU9250_LOW_SPI_BUS_SPEED	1000*1000
-#define MPU9250_HIGH_SPI_BUS_SPEED	20*1000*1000
+#define MPU9250_LOW_SPI_BUS_SPEED	1000*1000    //  1MHz
+#define MPU9250_HIGH_SPI_BUS_SPEED	20*1000*1000 // 20Mhz 
 
 
 device::Device *MPU9250_SPI_interface(int bus, uint32_t cs, bool external_bus);
@@ -111,7 +112,7 @@ MPU9250_SPI_interface(int bus, uint32_t cs, bool external_bus)
 #endif
 	}
 
-	if (cs != SPIDEV_NONE(0)) {
+	if (cs != SPIDEV_NONE(0)) { // device id가 none이 아닌 경우 
 		interface = new MPU9250_SPI(bus, cs);
 	}
 
@@ -131,12 +132,12 @@ MPU9250_SPI::ioctl(unsigned operation, unsigned &arg)
 
 	switch (operation) {
 
-	case ACCELIOCGEXTERNAL:
+	case ACCELIOCGEXTERNAL: //외부 센서에서 accel get
 		external();
 
 	/* FALLTHROUGH */
 
-	case DEVIOCGDEVICEID:
+	case DEVIOCGDEVICEID: // base class의 ioctl호출.  device id get
 		return CDev::ioctl(nullptr, operation, arg);
 
 	case MPUIOCGIS_I2C:
@@ -150,6 +151,7 @@ MPU9250_SPI::ioctl(unsigned operation, unsigned &arg)
 	return ret;
 }
 
+//freq 설정
 void
 MPU9250_SPI::set_bus_frequency(unsigned &reg_speed)
 {
@@ -162,27 +164,29 @@ MPU9250_SPI::set_bus_frequency(unsigned &reg_speed)
 	reg_speed = MPU9250_REG(reg_speed);
 }
 
+
 int
 MPU9250_SPI::write(unsigned reg_speed, void *data, unsigned count)
 {
-	uint8_t cmd[MPU_MAX_WRITE_BUFFER_SIZE];
+	uint8_t cmd[MPU_MAX_WRITE_BUFFER_SIZE]; //write buffer. size = 2
 
+	// 버퍼보다 큰 경우 error
 	if (sizeof(cmd) < (count + 1)) {
 		return -EIO;
 	}
 
+	// freq 설정 및 
 	/* Set the desired speed and isolate the register */
 
 	set_bus_frequency(reg_speed);
 
-	cmd[0] = reg_speed | DIR_WRITE;
-	cmd[1] = *(uint8_t *)data;
+	cmd[0] = reg_speed | DIR_WRITE; // 첫번째 buffer에는 WRITE 명령
+	cmd[1] = *(uint8_t *)data;     // 두번째 buffer에 data
 
 	return transfer(&cmd[0], &cmd[0], count + 1);
 }
 
-// MPUReport의 data를 copy를 피하기를 원함 : 만약 caller가 buffer를 제공하면, reg나 reg16를 읽는다고 가정하고 
-// caller data나 명령에 받을 만큼 충분한 크기를 제공해야함.
+// MPUReport의 data를 읽을지 cmd를 읽을지 buf를 결정. data를 읽기에 충분한 버퍼를 제공하도록.
 int
 MPU9250_SPI::read(unsigned reg_speed, void *data, unsigned count)
 {
@@ -193,6 +197,7 @@ MPU9250_SPI::read(unsigned reg_speed, void *data, unsigned count)
 	 */
 	uint8_t cmd[3] = {0, 0, 0};
 
+	// 읽을 내용은 cmd인지 data 인지를 결정(MPUReport보다 작으면 cmd라고 판단)
 	uint8_t *pbuff  =  count < sizeof(MPUReport) ? cmd : (uint8_t *) data ;
 
 
@@ -209,14 +214,14 @@ MPU9250_SPI::read(unsigned reg_speed, void *data, unsigned count)
 	// 명령 설정
 	/* Set command */
 
-	pbuff[0] = reg_speed | DIR_READ ;
+	pbuff[0] = reg_speed | DIR_READ ; // 첫번째 버퍼에 READ 명령 설정
 
-	// 명령을 전송하고 data를 얻기
+	// 명령을 전달하면 data를 얻는다.
 	/* Transfer the command and get the data */
 
 	int ret = transfer(pbuff, pbuff, count);
 
-	if (ret == OK && pbuff == &cmd[0]) {
+	if (ret == OK && pbuff == &cmd[0]) { //pbuff의 주소가 바뀌지 않은 경우 cmd를 그대로 사용
 
 		// count를 조정
 		/* Adjust the count back */
@@ -226,26 +231,27 @@ MPU9250_SPI::read(unsigned reg_speed, void *data, unsigned count)
 		// data 반환
 		/* Return the data */
 
-		memcpy(data, &cmd[1], count);
+		memcpy(data, &cmd[1], count); //
 
 	}
 
 	return ret;
 }
 
+// 장치가 연결되어 있는지 여부 확인
 int
 MPU9250_SPI::probe()
 {
 	uint8_t whoami = 0;
 
-	int ret = read(MPUREG_WHOAMI, &whoami, 1);
+	int ret = read(MPUREG_WHOAMI, &whoami, 1); // 9250 attach 여부 확인
 
 	if (ret != OK) {
 		return -EIO;
 	}
 
 	switch (whoami) {
-	case MPU_WHOAMI_9250:
+	case MPU_WHOAMI_9250:  // 9250이 있는 경우 0을 리턴
 	case MPU_WHOAMI_6500:
 		ret = 0;
 		break;

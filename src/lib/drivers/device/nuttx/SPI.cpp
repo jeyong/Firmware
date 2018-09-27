@@ -61,7 +61,7 @@ SPI::SPI(const char *name,
 	 const char *devname,
 	 int bus,
 	 uint32_t device,
-	 enum spi_mode_e mode,
+	 enum spi_mode_e mode, //clock mode
 	 uint32_t frequency) :
 	// base class
 	CDev(name, devname),
@@ -74,10 +74,12 @@ SPI::SPI(const char *name,
 	_frequency(frequency),
 	_dev(nullptr)
 {
+	// SPI 장치 관련해서 device id 관련 필드 초기화
 	// fill in _device_id fields for a SPI device
 	_device_id.devid_s.bus_type = DeviceBusType_SPI;
 	_device_id.devid_s.bus = bus;
 	_device_id.devid_s.address = (uint8_t)device;
+	// devicetype은 driver에서 채운다.
 	// devtype needs to be filled in by the driver
 	_device_id.devid_s.devtype = 0;
 }
@@ -92,6 +94,7 @@ SPI::init()
 {
 	int ret = OK;
 
+	// spi bus에 attach를 위한 초기화
 	/* attach to the spi bus */
 	if (_dev == nullptr) {
 		_dev = px4_spibus_initialize(get_device_bus());
@@ -103,9 +106,11 @@ SPI::init()
 		goto out;
 	}
 
+	// pin selection의 high -> low 전환이 가능하도록 device를 풀어 놓기. unselect 상태로 초기화
 	/* deselect device to ensure high to low transition of pin select */
 	SPI_SELECT(_dev, _device, false);
 
+	// probe()는 해당 device가 존재하는지 여부를 검사
 	/* call the probe function to check whether the device is present */
 	ret = probe();
 
@@ -114,6 +119,7 @@ SPI::init()
 		goto out;
 	}
 
+	// device node 생성
 	/* do base class init, which will create the device node, etc. */
 	ret = CDev::init();
 
@@ -129,6 +135,7 @@ out:
 	return ret;
 }
 
+// 전송의 실제 처리는 _transfer()에서 처리. 전송하기전에 lock 처리 설정.
 int
 SPI::transfer(uint8_t *send, uint8_t *recv, unsigned len)
 {
@@ -140,23 +147,24 @@ SPI::transfer(uint8_t *send, uint8_t *recv, unsigned len)
 
 	LockMode mode = up_interrupt_context() ? LOCK_NONE : locking_mode;
 
+	// 필요에 따라서 bus를 lock
 	/* lock the bus as required */
 	switch (mode) {
 	default:
-	case LOCK_PREEMPTION: {
+	case LOCK_PREEMPTION: { // 시스템 차원에서 lock
 			irqstate_t state = px4_enter_critical_section();
 			result = _transfer(send, recv, len);
 			px4_leave_critical_section(state);
 		}
 		break;
 
-	case LOCK_THREADS:
+	case LOCK_THREADS: // spi에서 lock
 		SPI_LOCK(_dev, true);
 		result = _transfer(send, recv, len);
 		SPI_LOCK(_dev, false);
 		break;
 
-	case LOCK_NONE:
+	case LOCK_NONE: // lock 없이 전송
 		result = _transfer(send, recv, len);
 		break;
 	}
@@ -164,23 +172,25 @@ SPI::transfer(uint8_t *send, uint8_t *recv, unsigned len)
 	return result;
 }
 
+// 실제 전송 처리 부분. 
 int
 SPI::_transfer(uint8_t *send, uint8_t *recv, unsigned len)
 {
-	SPI_SETFREQUENCY(_dev, _frequency);
-	SPI_SETMODE(_dev, _mode);
-	SPI_SETBITS(_dev, 8);
-	SPI_SELECT(_dev, _device, true);
+	SPI_SETFREQUENCY(_dev, _frequency); //freq 설정
+	SPI_SETMODE(_dev, _mode);  // mode 설정
+	SPI_SETBITS(_dev, 8);  
+	SPI_SELECT(_dev, _device, true); // 전송을 위한 select true
 
-	/* do the transfer */
+	/* do the transfer */ // //send, recv 전송처리
 	SPI_EXCHANGE(_dev, send, recv, len);
 
-	/* and clean up */
+	/* and clean up */ // 전송을 마치고 false로 설정
 	SPI_SELECT(_dev, _device, false);
 
 	return OK;
 }
 
+// _transferhword 처리. 즉 half-word(16bit) 전용 전송
 int
 SPI::transferhword(uint16_t *send, uint16_t *recv, unsigned len)
 {

@@ -101,17 +101,17 @@
   list of registers that will be checked in check_registers(). Note
   that MPUREG_PRODUCT_ID must be first in the list.
  */
-const uint8_t MPU9250::_checked_registers[MPU9250_NUM_CHECKED_REGISTERS] = { MPUREG_WHOAMI,
-									     MPUREG_PWR_MGMT_1,
+const uint8_t MPU9250::_checked_registers[MPU9250_NUM_CHECKED_REGISTERS] = { MPUREG_WHOAMI, // product ID
+									     MPUREG_PWR_MGMT_1, // power management
 									     MPUREG_PWR_MGMT_2,
 									     MPUREG_USER_CTRL,
 									     MPUREG_SMPLRT_DIV,
 									     MPUREG_CONFIG,
-									     MPUREG_GYRO_CONFIG,
-									     MPUREG_ACCEL_CONFIG,
+									     MPUREG_GYRO_CONFIG, //gyro config
+									     MPUREG_ACCEL_CONFIG, //accel config
 									     MPUREG_ACCEL_CONFIG2,
-									     MPUREG_INT_ENABLE,
-									     MPUREG_INT_PIN_CFG
+									     MPUREG_INT_ENABLE, // interrupt enable
+									     MPUREG_INT_PIN_CFG // interrupt pin config
 									   };
 
 
