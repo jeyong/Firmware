@@ -218,7 +218,7 @@ struct MPUReport {
 
 /*
   MPU9250은 고속 버스와 interrupt status 레지스터를 처리할 수 있음.
-  다른 모든 register는 최대 1MHz로 통신. I2C는 400kHz, SPI는 1MHz.
+  I2C는 400kHz, SPI는 1MHz.
   더 빠른 통신이 필요한 경우, 센서와 interrupt register는 SPI로 20MHz로 읽기가 가능.
   The MPU9250 can only handle high bus speeds on the sensor and
   interrupt status registers. All other registers have a maximum 1MHz

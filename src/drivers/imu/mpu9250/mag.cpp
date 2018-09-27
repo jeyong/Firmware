@@ -195,13 +195,13 @@ MPU9250_mag::_measure(struct ak8963_regs data)
 		return;
 	}
 
-	//overrun flag가 설정되어 있는지 감시
+	//overrun flag가 설정되어 있는지 감시 (측정을 skip하는 경우)
 	/* monitor for if data overrun flag is ever set */
 	if (data.st1 & 0x02) {
 		perf_count(_mag_overruns);
 	}
 
-	// mag 센서 overflow flag 감시
+	// mag 센서 overflow flag 감시 (측정 범위를 벗어나는 경우)
 	/* monitor for if magnetic sensor overflow flag is ever set noting that st2
 	 * is usually not even refreshed, but will always be in the same place in the
 	 * mpu's buffers regardless, hence the actual count would be bogus

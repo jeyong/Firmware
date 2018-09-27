@@ -53,11 +53,11 @@
 #define AK8963_DEVICE_ID        0x48
 
 #define AK8963REG_WIA           0x00
-#define AK8963REG_ST1           0x02
+#define AK8963REG_ST1           0x02 // status 1 (data ready, data overrun(측정시 data skipped된 경우))
 #define AK8963REG_HXL           0x03
 #define AK8963REG_ASAX          0x10
-#define AK8963REG_CNTL1         0x0A
-#define AK8963REG_CNTL2         0x0B
+#define AK8963REG_CNTL1         0x0A // operation mode, output bit setting (14 or 16bits)
+#define AK8963REG_CNTL2         0x0B // soft reset
 
 #define AK8963_SINGLE_MEAS_MODE 0x01
 #define AK8963_CONTINUOUS_MODE1 0x02
@@ -79,7 +79,7 @@ struct ak8963_regs {
 	int16_t x;
 	int16_t y;
 	int16_t z;
-	uint8_t st2;
+	uint8_t st2; // status 2 (mag sensor overflow, output bit 14 or 16bit)
 };
 #pragma pack(pop)
 

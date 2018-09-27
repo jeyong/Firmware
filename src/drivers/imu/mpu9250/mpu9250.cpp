@@ -857,9 +857,11 @@ MPU9250::ioctl(struct file *filp, int cmd, unsigned long arg)
 			// polling interval을 조정 Hz 단위 
 			/* adjust to a legal polling interval in Hz */
 			default: {
-					/* do we need to start internal polling? */ // 내부 polling을 시작해야하는지
+					// 처음 시작하는 경우 내부 polling을 시작해야하는지 want_start를 true로 설정
+					/* do we need to start internal polling? */
 					bool want_start = (_call_interval == 0);
 
+					// 1000 us
 					/* convert hz to hrt interval via microseconds */ // hz를 us 단위의 hrt interval로 변환
 					unsigned ticks = 1000000 / arg;
 
@@ -869,6 +871,7 @@ MPU9250::ioctl(struct file *filp, int cmd, unsigned long arg)
 						return -EINVAL;
 					}
 
+					// accel, gyro에 대힌 low pass filter 초기화
 					// adjust filters // filter 조정
 					float cutoff_freq_hz = _accel_filter_x.get_cutoff_freq();
 					float sample_rate = 1.0e6f / ticks;
@@ -888,13 +891,13 @@ MPU9250::ioctl(struct file *filp, int cmd, unsigned long arg)
 					_call_interval = ticks;
 
 					/*
-					  sample time보다 interval을 더 빠르게 호출하도록 설정.
-					  중복 sample을 탐지하면 reject. stm32와 mpu9250 clock 사이에 beat때문에 aliasing을 방지.
+					  sample time보다 interval을 더 빠르게 호출하도록 설정. (시간 지연에 대비해서 딱맞게 )
+					  중복 sample을 탐지하면 reject. stm32와 mpu9250 clock 사이에 beat때문에 aliasing을 방지. (800 us)
 					  set call interval faster than the sample time. We
 					  then detect when we have duplicate samples and reject
 					  them. This prevents aliasing due to a beat between the
 					  stm32 clock and the mpu9250 clock
-					 */
+					 */ // 실제 system 동작 interval : _call.period, 기대하는 interval : _call_interval
 					_call.period = _call_interval - MPU9250_TIMER_REDUCTION;
 
 					// poll state machine을 시작해야한다면 start 호출
@@ -1155,7 +1158,7 @@ MPU9250::start()
 		/* start polling at the specified rate */
 		hrt_call_every(&_call,
 			       1000,
-			       _call_interval - MPU9250_TIMER_REDUCTION,
+			       _call_interval - MPU9250_TIMER_REDUCTION, //800 us
 			       (hrt_callout)&MPU9250::measure_trampoline, this);
 
 	} else {
@@ -1226,8 +1229,8 @@ MPU9250::measure_trampoline(void *arg)
 }
 
 // 최대 속도로 register 읽기.(high speed register로 등록되어 있지 않더라도)
-// 일부 register에 대해서 낮은 속도로 되어 있는 것은 센서 설정을 변경하는데 지연시간이 필요하기 때문이다.
-// data register를 읽는 것과 같이 동일한 속도로 읽기 위해서 SPI bus healty를 테스트하는 것이 좋다.
+// 일부 register에 대해서 저속으로 읽기가 가능한 경우 센서 설정을 변경하는데 여러 register를 읽기 위해서 시간 지연이 누적. 단일 register를 읽을때는 이런 지연시간이 누적되는 경우는 없음.
+// data register를 읽는 속도와 동일한 속도로 읽기는 것도 SPI bus 상태를 테스트하는 좋은 방법
 void
 MPU9250::check_registers(void)
 {
@@ -1243,12 +1246,12 @@ MPU9250::check_registers(void)
 	uint8_t v;
 
 	if ((v = read_reg(_checked_registers[_checked_next], MPU9250_HIGH_BUS_SPEED)) !=
-	    _checked_values[_checked_next]) {
-		_checked_bad[_checked_next] = v;
+	    _checked_values[_checked_next]) { // 검사 같과 같아야 정상인데 다른 경우 문제가 있는 경우
+		_checked_bad[_checked_next] = v; // bad 값을 저장하는 곳에 넣고
 
 		/*
-		  이상한 값을 가져오는 경우 SPI bus나 센서가 문제가 있다는 것을 알 수 있음.
-		  _register_wait을 20으로 설정하고 센서가 다시 OK상태로 되기 전에 20 값을 볼 수 있을때까지 대기. 
+		  이상한 값을 가져오는 경우 SPI bus나 센서가 문제가 있다는 증거.
+		  _register_wait을 20으로 설정하고 센서가 다시 OK상태로 되기 체크 
 		  if we get the wrong value then we know the SPI bus
 		  or sensor is very sick. We set _register_wait to 20
 		  and wait until we have seen 20 good values in a row
@@ -1257,17 +1260,17 @@ MPU9250::check_registers(void)
 		perf_count(_bad_registers);
 
 		/*
-		  bad register 값을 고쳐지도록 하자.
+		  bad register 값을 고치도록 시도하기. 문제있는 센서가 bus를 망치는 않도록 loop마다 수정을 시도.
 		  고장난 센서가 bus를 차지하는 것을 막기 위해서 loop마다 한 번 fix 작업 수행.
 		  try to fix the bad register value. We only try to
 		  fix one per loop to prevent a bad sensor hogging the
 		  bus.
 		 */
-		if (_register_wait == 0 || _checked_next == 0) {
+		if (_register_wait == 0 || _checked_next == 0) { // _register_wait은 20번 loop 돈 경우 혹은 처음부터 체크하는 경우 
 			// product_id가 잘못된 값이면 센서를 완전히 reset시킨다.
 			// if the product_id is wrong then reset the
 			// sensor completely
-			write_reg(MPUREG_PWR_MGMT_1, BIT_H_RESET);
+			write_reg(MPUREG_PWR_MGMT_1, BIT_H_RESET); // 센서 완전 reset
 			write_reg(MPUREG_PWR_MGMT_2, MPU_CLK_SEL_AUTO);
 			// reset 후에 잠시 대기한다. 이후에 register 쓰기 혹은 이상한 상태에 있는 모든 register를 제대로 보정하고 mpu9250을 종료시킴. 
 			// after doing a reset we need to wait a long
@@ -1280,6 +1283,7 @@ MPU9250::check_registers(void)
 			_checked_next = 0;
 
 		} else {
+			// 정상값을 register에 쓰기
 			write_reg(_checked_registers[_checked_next], _checked_values[_checked_next]);
 			// 센서가 복구되는 기회를 주기 위해서 register에 쓰기 전에 3ms 정도 대기
 			// waiting 3ms between register writes seems
@@ -1321,7 +1325,7 @@ bool MPU9250::check_duplicate(uint8_t *accel_data)
 {
 	/*
 	   accel data 중복 여부 검사.
-	   status register에 있는 data ready interrupt status bit을 사용할 수 없음(왜냐하면 새로운 gyro data가 들어오면 high로 되니까)
+	   status register에 있는 data ready interrupt status bit을 사용할 수 없음(왜냐하면 새로운 gyro data가 들어와도 high로 되니까)
 	   BITS_DLPF_CFG_256HZ_NOLPF2을 설정한 경우 gyro를 8kHz로 샘플링을 하므로 실제로는 중복 accel data가 들어왔는데 새로운 data가 들어왔다고 착각할 수 있음.
 	   see if this is duplicate accelerometer data. Note that we
 	   can't use the data ready interrupt status bit in the status
@@ -1330,7 +1334,7 @@ bool MPU9250::check_duplicate(uint8_t *accel_data)
 	   sampled at 8kHz, so we would incorrectly think we have new
 	   data when we are in fact getting duplicate accelerometer data.
 	*/
-	// memcmp()의 경우 같은 경우 0을 return
+	// 2개가 같은 경우 memcmp()은 0을 반환
 	if (!_got_duplicate && memcmp(accel_data, &_last_accel_data, sizeof(_last_accel_data)) == 0) {
 		// 이 경우 새로운 data가 아니므로 다음 timer를 기다림
 		// it isn't new data - wait for next timer
@@ -1338,7 +1342,7 @@ bool MPU9250::check_duplicate(uint8_t *accel_data)
 		perf_count(_duplicates);
 		_got_duplicate = true;
 
-	} else { //_got_duplicate or memcmp가 0인 경우
+	} else { // 이전 값과 다른 경우 복사
 		memcpy(&_last_accel_data, accel_data, sizeof(_last_accel_data));
 		_got_duplicate = false;
 	}
@@ -1371,7 +1375,7 @@ MPU9250::measure()
 	perf_begin(_sample_perf);
 
 	/*
-	 * MPU9250에서 측정값 전체 set을 가져오기
+	 * MPU9250 SPI 인터페이스로 측정값 전체 set을 가져오기
 	 * Fetch the full set of measurements from the MPU9250 in one pass.
 	 */
 	if (OK != _interface->read(MPU9250_SET_SPEED(MPUREG_INT_STATUS, MPU9250_HIGH_BUS_SPEED),
@@ -1381,7 +1385,7 @@ MPU9250::measure()
 		return;
 	}
 
-	// register를 검사
+	// register를 검사 제대로 읽히는지에 따라서 spi bus나 센서의 상태를 체크 가능
 	check_registers();
 
 	// 중복 검사
@@ -1569,8 +1573,8 @@ MPU9250::measure()
 	/* return device ID */
 	grb.device_id = _gyro->_device_id.devid;
 
-	_accel_reports->force(&arb);
-	_gyro_reports->force(&grb);
+	_accel_reports->force(&arb); // arb를 ringbuffer에 넣기
+	_gyro_reports->force(&grb); // grb를 ringbuffer에 넣기
 
 	// data를 기다리는 쪽에다가 notify
 	/* notify anyone waiting for data */
