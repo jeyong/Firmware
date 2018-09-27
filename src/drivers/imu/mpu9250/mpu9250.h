@@ -30,6 +30,7 @@
  * POSSIBILITY OF SUCH DAMAGE.
  *
  ****************************************************************************/
+// https://www.geeksforgeeks.org/friend-class-function-cpp/
 
 #include <stdint.h>
 
@@ -272,7 +273,7 @@ protected:
 
 	virtual int		probe();
 
-	friend class MPU9250_mag;
+	friend class MPU9250_mag; // MPU9250_mag class는 MPU9250 class의 private에 접근 가능
 	friend class MPU9250_gyro;
 
 	virtual ssize_t		gyro_read(struct file *filp, char *buffer, size_t buflen);

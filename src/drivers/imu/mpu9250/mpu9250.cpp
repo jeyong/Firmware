@@ -1428,7 +1428,8 @@ MPU9250::measure()
 	}
 
 	/*
-	 * 축을 바꾸고 
+	 * 축을 바꾸기
+	 * http://www.plclive.com/uploads/allimg/160323/110R2G42-0.png 참고
 	 * Swap axes and negate y
 	 */
 	int16_t accel_xt = report.accel_y;

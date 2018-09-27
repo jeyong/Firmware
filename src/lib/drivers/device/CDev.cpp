@@ -322,6 +322,7 @@ CDev::poll(file_t *filep, px4_pollfd_struct_t *fds, bool setup)
 	return ret;
 }
 
+// poll waiter에게 notify 전달
 void
 CDev::poll_notify(pollevent_t events)
 {

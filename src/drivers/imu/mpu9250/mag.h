@@ -37,10 +37,12 @@
 #include "drivers/drv_mag.h"		// mag_calibration_s
 #include <perf/perf_counter.h>
 
+// bit당 1.5 밀리 가우스 
 /* in 16-bit sampling mode the mag resolution is 1.5 milli Gauss per bit */
 
 #define MPU9250_MAG_RANGE_GA        1.5e-3f;
 
+// 100Hz로 고정 sampling 속도
 /* we are using the continuous fixed sampling rate of 100Hz */
 
 #define MPU9250_AK8963_SAMPLE_RATE 100
@@ -112,13 +114,16 @@ public:
 	bool ak8963_read_adjustments(void);
 
 protected:
+	// 센서의 측정을 위한 interface 
 	Device			*_interface;
 
 	friend class MPU9250;
 
+	// interface로부터 직접 측정
 	/* Directly measure from the _interface if possible */
 	void measure();
 
+	// 가져온 data로 state를 업데이트 (measure()가 일정하게 호출)
 	/* Update the state with prefetched data (internally called by the regular measure() )*/
 	void _measure(struct ak8963_regs data);
 
@@ -126,19 +131,19 @@ protected:
 	uint8_t read_reg(unsigned reg);
 	void write_reg(unsigned reg, uint8_t value);
 
-
+	// passthrough mode
 	bool is_passthrough() { return _interface == nullptr; }
 
 	int self_test(void);
 
 private:
 	MPU9250 *_parent;
-	orb_advert_t _mag_topic;
+	orb_advert_t _mag_topic; // mag topic
 	int _mag_orb_class_instance;
 	int _mag_class_instance;
 	bool _mag_reading_data;
-	ringbuffer::RingBuffer *_mag_reports;
-	struct mag_calibration_s _mag_scale;
+	ringbuffer::RingBuffer *_mag_reports; // 링버퍼
+	struct mag_calibration_s _mag_scale; //offset과 scale 정보
 	float _mag_range_scale;
 	perf_counter_t _mag_reads;
 	perf_counter_t _mag_errors;
