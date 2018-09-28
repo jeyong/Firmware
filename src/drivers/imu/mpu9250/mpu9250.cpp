@@ -1432,7 +1432,7 @@ MPU9250::measure()
 	}
 
 	/*
-	 * 축을 바꾸기
+	 * 축을 바꾸기 (기체 body frame 기준 x, y, z (roll, pitch, yaw) 맞춤). mag와 같은 방향으로 맞추기
 	 * http://www.plclive.com/uploads/allimg/160323/110R2G42-0.png 참고
 	 * Swap axes and negate y
 	 */
