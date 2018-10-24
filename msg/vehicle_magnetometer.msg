@@ -1,2 +1,2 @@
 
-float32[3] magnetometer_ga		# Magnetic field in NED body frame, in Gauss
+float32[3] magnetometer_ga		# NED 바디 프레임에서 자기장 값 (단위 Gauss)

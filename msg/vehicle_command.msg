@@ -1,7 +1,7 @@
 
-uint16 VEHICLE_CMD_CUSTOM_0 = 0				# test command
-uint16 VEHICLE_CMD_CUSTOM_1 = 1				# test command
-uint16 VEHICLE_CMD_CUSTOM_2 = 2				# test command
+uint16 VEHICLE_CMD_CUSTOM_0 = 0				# 테스트 명령
+uint16 VEHICLE_CMD_CUSTOM_1 = 1				# 테스트 명령
+uint16 VEHICLE_CMD_CUSTOM_2 = 2				# 테스트 명령
 uint16 VEHICLE_CMD_NAV_WAYPOINT = 16			# Navigate to MISSION. |Hold time in decimal seconds. (ignored by fixed wing, time to stay at MISSION for rotary wing)| Acceptance radius in meters (if the sphere with this radius is hit, the MISSION counts as reached)| 0 to pass through the WP, if > 0 radius in meters to pass by WP. Positive value for clockwise orbit, negative value for counter-clockwise orbit. Allows trajectory control.| Desired yaw angle at MISSION (rotary wing)| Latitude| Longitude| Altitude|
 uint16 VEHICLE_CMD_NAV_LOITER_UNLIM = 17		# Loiter around this MISSION an unlimited amount of time |Empty| Empty| Radius around MISSION, in meters. If positive loiter clockwise, else counter-clockwise| Desired yaw angle.| Latitude| Longitude| Altitude|
 uint16 VEHICLE_CMD_NAV_LOITER_TURNS = 18		# Loiter around this MISSION for X turns |Turns| Empty| Radius around MISSION, in meters. If positive loiter clockwise, else counter-clockwise| Desired yaw angle.| Latitude| Longitude| Altitude|
@@ -74,12 +74,12 @@ uint16 VEHICLE_CMD_LOGGING_START = 2510		# start streaming ULog data
 uint16 VEHICLE_CMD_LOGGING_STOP = 2511			# stop streaming ULog data
 uint16 VEHICLE_CMD_CONTROL_HIGH_LATENCY = 2600	# control starting/stopping transmitting data over the high latency link
 
-uint8 VEHICLE_CMD_RESULT_ACCEPTED = 0			# Command ACCEPTED and EXECUTED |
-uint8 VEHICLE_CMD_RESULT_TEMPORARILY_REJECTED = 1	# Command TEMPORARY REJECTED/DENIED |
-uint8 VEHICLE_CMD_RESULT_DENIED = 2			# Command PERMANENTLY DENIED |
-uint8 VEHICLE_CMD_RESULT_UNSUPPORTED = 3		# Command UNKNOWN/UNSUPPORTED |
-uint8 VEHICLE_CMD_RESULT_FAILED = 4			# Command executed, but failed |
-uint8 VEHICLE_CMD_RESULT_IN_PROGRESS = 5		# Command being executed |
+uint8 VEHICLE_CMD_RESULT_ACCEPTED = 0			# ACCEPTED와 EXECUTED 명령 |
+uint8 VEHICLE_CMD_RESULT_TEMPORARILY_REJECTED = 1	# TEMPORARY REJECTED/DENIED 명령 |
+uint8 VEHICLE_CMD_RESULT_DENIED = 2			# PERMANENTLY DENIED 명령 |
+uint8 VEHICLE_CMD_RESULT_UNSUPPORTED = 3		# UNKNOWN/UNSUPPORTED 명령 |
+uint8 VEHICLE_CMD_RESULT_FAILED = 4			# 명령 실행 후 실패 |
+uint8 VEHICLE_CMD_RESULT_IN_PROGRESS = 5		# 실행 중인 명령 |
 uint8 VEHICLE_CMD_RESULT_ENUM_END = 6			#
 
 uint8 VEHICLE_MOUNT_MODE_RETRACT = 0				# Load and keep safe position (Roll,Pitch,Yaw) from permanent memory and stop stabilization |
@@ -90,25 +90,25 @@ uint8 VEHICLE_MOUNT_MODE_GPS_POINT = 4				# Load neutral position and start to p
 uint8 VEHICLE_MOUNT_MODE_ENUM_END = 5				#
 
 uint8 VEHICLE_ROI_NONE = 0                         # No region of interest |
-uint8 VEHICLE_ROI_WPNEXT = 1                       # Point toward next MISSION |
-uint8 VEHICLE_ROI_WPINDEX = 2                      # Point toward given MISSION |
-uint8 VEHICLE_ROI_LOCATION = 3                     # Point toward fixed location |
-uint8 VEHICLE_ROI_TARGET = 4                       # Point toward target
+uint8 VEHICLE_ROI_WPNEXT = 1                       # 다음 MISSION의 Point |
+uint8 VEHICLE_ROI_WPINDEX = 2                      # 주어진 MISSION의 Point |
+uint8 VEHICLE_ROI_LOCATION = 3                     # 고정 위치의 Point |
+uint8 VEHICLE_ROI_TARGET = 4                       # 타겟의 Point
 uint8 VEHICLE_ROI_ENUM_END = 5
 
 uint8 ORB_QUEUE_LENGTH = 3
 
-float32 param1			# Parameter 1, as defined by MAVLink uint16 VEHICLE_CMD enum.
-float32 param2			# Parameter 2, as defined by MAVLink uint16 VEHICLE_CMD enum.
-float32 param3			# Parameter 3, as defined by MAVLink uint16 VEHICLE_CMD enum.
-float32 param4			# Parameter 4, as defined by MAVLink uint16 VEHICLE_CMD enum.
-float64 param5			# Parameter 5, as defined by MAVLink uint16 VEHICLE_CMD enum.
-float64 param6			# Parameter 6, as defined by MAVLink uint16 VEHICLE_CMD enum.
-float32 param7			# Parameter 7, as defined by MAVLink uint16 VEHICLE_CMD enum.
-uint16 command			# Command ID, as defined MAVLink by uint16 VEHICLE_CMD enum.
-uint8 target_system		# System which should execute the command
-uint8 target_component		# Component which should execute the command, 0 for all components
-uint8 source_system		# System sending the command
-uint8 source_component		# Component sending the command
-uint8 confirmation		# 0: First transmission of this command. 1-255: Confirmation transmissions (e.g. for kill command)
+float32 param1			# Parameter 1로 VEHICLE_CMD enum으로 정의
+float32 param2			# Parameter 2로 VEHICLE_CMD enum으로 정의
+float32 param3			# Parameter 3로 VEHICLE_CMD enum으로 정의
+float32 param4			# Parameter 4로 VEHICLE_CMD enum으로 정의
+float64 param5			# Parameter 5로 VEHICLE_CMD enum으로 정의
+float64 param6			# Parameter 6로 VEHICLE_CMD enum으로 정의
+float32 param7			# Parameter 7로 VEHICLE_CMD enum으로 정의
+uint16 command			# Command ID로 VEHICLE_CMD enum으로 정의
+uint8 target_system		# 명령을 실행하는 System
+uint8 target_component		# 명령을 실행하는 Component
+uint8 source_system		# 명령을 전송하는 System
+uint8 source_component		# 명령을 전송하는 Component
+uint8 confirmation		# 0: 처음 전송 명령, 1-255: 확인 전송
 bool from_external

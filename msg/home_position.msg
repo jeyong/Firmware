@@ -1,16 +1,16 @@
 # GPS home position in WGS84 coordinates.
 
-float64 lat				# Latitude in degrees
-float64 lon				# Longitude in degrees
-float32 alt				# Altitude in meters (AMSL)
+float64 lat				# 위도
+float64 lon				# 경도
+float32 alt				# 해수면 고도
 
-float32 x				# X coordinate in meters
-float32 y				# Y coordinate in meters
-float32 z				# Z coordinate in meters
+float32 x				# X 좌포(m단위)
+float32 y				# Y 좌포(m단위)
+float32 z				# Z 좌포(m단위)
 
-float32 yaw				# Yaw angle in radians
+float32 yaw				# Yaw 각도(radian)
 
-bool valid_alt		# true when the altitude has been set
-bool valid_hpos		# true when the latitude and longitude have been set
+bool valid_alt		# 고도가 설정된 경우 true
+bool valid_hpos		# 위도와 경도가 설정된 경우 true
 
-bool manual_home	# true when home position was set manually
+bool manual_home	# home 위치가 수동으로 설정된 경우 true

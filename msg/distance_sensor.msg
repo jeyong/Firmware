@@ -1,20 +1,20 @@
 # DISTANCE_SENSOR message data
 
 
-float32 min_distance		# Minimum distance the sensor can measure (in m)
-float32 max_distance		# Maximum distance the sensor can measure (in m)
-float32 current_distance	# Current distance reading (in m)
-float32 covariance		# Measurement covariance (in m), 0 for unknown / invalid readings
+float32 min_distance		# 센서가 측정하는 최소 거리 (m 단위)
+float32 max_distance		# 센서가 측정하는 최대 거리 (m 단위)
+float32 current_distance	# 현재 측정한 거리 (m 단위)
+float32 covariance		# 측정 공분산 (m 단위)
 
-uint8 type			# Type from MAV_DISTANCE_SENSOR enum
+uint8 type			# MAV_DISTANCE_SENSOR enum으로 쓰이는 타입
 uint8 MAV_DISTANCE_SENSOR_LASER = 0
 uint8 MAV_DISTANCE_SENSOR_ULTRASOUND = 1
 uint8 MAV_DISTANCE_SENSOR_INFRARED = 2
 uint8 MAV_DISTANCE_SENSOR_RADAR = 3
 
-uint8 id			# Onboard ID of the sensor
+uint8 id			# 센서의 온보드 ID
 
-uint8 orientation		# Direction the sensor faces from MAV_SENSOR_ORIENTATION enum
+uint8 orientation		# 센서 부탁 방향
 uint8 ROTATION_DOWNWARD_FACING = 25 # MAV_SENSOR_ROTATION_PITCH_270
 uint8 ROTATION_UPWARD_FACING   = 24 # MAV_SENSOR_ROTATION_PITCH_90
 uint8 ROTATION_BACKWARD_FACING = 12 # MAV_SENSOR_ROTATION_PITCH_180

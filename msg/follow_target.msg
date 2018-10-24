@@ -1,7 +1,7 @@
-float64 lat			# target position (deg * 1e7)
-float64 lon			# target position (deg * 1e7) 
-float32 alt			# target position
-float32 vy			# target vel in y
-float32 vx			# target vel in x
-float32 vz			# target vel in z 
-uint8 est_cap # target reporting capabilities
+float64 lat			# 타겟의 위치 위도 (deg * 1e7)
+float64 lon			# 타겟의 위치 경도 (deg * 1e7)
+float32 alt			# 타겟의 위치 고도
+float32 vy			# 타겟의 y 방향 속도
+float32 vx			# 타겟의 x 방향 속도
+float32 vz			# 타겟의 z 방향 속도
+uint8 est_cap # 타겟 리포팅 용량

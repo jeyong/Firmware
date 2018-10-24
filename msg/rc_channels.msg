@@ -25,10 +25,10 @@ uint8 RC_CHANNELS_FUNCTION_ARMSWITCH=23
 uint8 RC_CHANNELS_FUNCTION_STAB=24
 uint8 RC_CHANNELS_FUNCTION_MAN=25
 
-uint64 timestamp_last_valid					# Timestamp of last valid RC signal
-float32[18] channels						# Scaled to -1..1 (throttle: 0..1)
-uint8 channel_count						# Number of valid channels
-int8[26] function						# Functions mapping
-uint8 rssi							# Receive signal strength index
-bool signal_lost						# Control signal lost, should be checked together with topic timeout
-uint32 frame_drop_count						# Number of dropped frames
+uint64 timestamp_last_valid					# 마지막 유효한 RC 시그날에 대한 Timestamp
+float32[18] channels						# 스케일링 -1..1 (throttle: 0..1)
+uint8 channel_count						# 유효한 채널의 갯수
+int8[26] function						# 기능 매핑
+uint8 rssi							# 수신 신호 강도 인덱스
+bool signal_lost						# 제어 신호 상실 (topic timeout과 함께 검사)
+uint32 frame_drop_count						# drop된 프레임의 갯수

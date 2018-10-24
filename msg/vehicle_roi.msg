@@ -1,20 +1,20 @@
 # Vehicle Region Of Interest (ROI)
 
 uint8 ROI_NONE = 0                         # No region of interest
-uint8 ROI_WPNEXT = 1                       # Point toward next MISSION with optional offset
-uint8 ROI_WPINDEX = 2                      # Point toward given MISSION
-uint8 ROI_LOCATION = 3                     # Point toward fixed location
-uint8 ROI_TARGET = 4                       # Point toward target
+uint8 ROI_WPNEXT = 1                       # 다음 MISSION으로
+uint8 ROI_WPINDEX = 2                      # index로 주어진 MISSION으로 
+uint8 ROI_LOCATION = 3                     # 고정 위치로
+uint8 ROI_TARGET = 4                       # 타겟으로
 uint8 ROI_ENUM_END = 5
 
-uint8 mode          # ROI mode (see above)
+uint8 mode          # ROI 모드
 
-float64 lat			    # Latitude to point to
-float64 lon			    # Longitude to point to
-float32 alt			    # Altitude to point to
+float64 lat			    # 위도
+float64 lon			    # 경도
+float32 alt			    # 고도
 
-# additional angle offsets to next waypoint (only used with ROI_WPNEXT)
-float32 roll_offset		# angle offset in rad
-float32 pitch_offset		# angle offset in rad
-float32 yaw_offset		# angle offset in rad
+# 다음 waypoint에 대한 추가 각도 오프셋
+float32 roll_offset		# 각도 오프셋 (rad 단위)
+float32 pitch_offset		# 각도 오프셋 (rad 단위)
+float32 yaw_offset		# 각도 오프셋 (rad 단위)
 

@@ -13,15 +13,15 @@ uint8 RC_INPUT_SOURCE_PX4FMU_SUMD = 11
 uint8 RC_INPUT_SOURCE_PX4FMU_DSM = 12
 uint8 RC_INPUT_SOURCE_PX4IO_SUMD = 13
 
-uint8 RC_INPUT_MAX_CHANNELS = 18 	# Maximum number of R/C input channels in the system. S.Bus has up to 18 channels.
+uint8 RC_INPUT_MAX_CHANNELS = 18 	# RC 입력 채널의 최대 갯수
 
-uint64 timestamp_last_signal		# last valid reception time
-uint32 channel_count			# number of channels actually being seen
-int32 rssi				# receive signal strength indicator (RSSI): < 0: Undefined, 0: no signal, 100: full reception
-bool rc_failsafe			# explicit failsafe flag: true on TX failure or TX out of range , false otherwise. Only the true state is reliable, as there are some (PPM) receivers on the market going into failsafe without telling us explicitly.
-bool rc_lost				# RC receiver connection status: True,if no frame has arrived in the expected time, false otherwise. True usUally means that the receiver has been disconnected, but can also indicate a radio link loss on "stupid" systems. Will remain false, if a RX with failsafe option continues to transmit frames after a link loss.
-uint16 rc_lost_frame_count		# Number of lost RC frames. Note: intended purpose: observe the radio link quality if RSSI is not available. This value must not be used to trigger any failsafe-alike funtionality.
-uint16 rc_total_frame_count		# Number of total RC frames. Note: intended purpose: observe the radio link quality if RSSI is not available. This value must not be used to trigger any failsafe-alike funtionality.
-uint16 rc_ppm_frame_length		# Length of a single PPM frame. Zero for non-PPM systems
-uint8 input_source			# Input source
-uint16[18] values			# measured pulse widths for each of the supported channels
+uint64 timestamp_last_signal		# 최종 유효 수신 시간
+uint32 channel_count			# 실제 사용하는 채널의 갯수
+int32 rssi				# 수신 신호 세기 (RSSI)
+bool rc_failsafe			# 명시적인 failsafe flag로 TX가 failure인 경우 true
+bool rc_lost				# RC 수신기 연결 상태
+uint16 rc_lost_frame_count		# 수신하지 못한 RC frame의 갯수
+uint16 rc_total_frame_count		# 전체 RC 프레임의 갯수
+uint16 rc_ppm_frame_length		# 단일 PPM 프레임의 갯수
+uint8 input_source			# 입력 소스
+uint16[18] values			# 지원하는 채널 각각에 대한 펄스의 폭을 측정

@@ -1,10 +1,10 @@
-uint8 RC_PARAM_MAP_NCHAN = 3 # This limit is also hardcoded in the enum RC_CHANNELS_FUNCTION in rc_channels.h
-uint8 PARAM_ID_LEN = 16 # corresponds to MAVLINK_MSG_PARAM_VALUE_FIELD_PARAM_ID_LEN
+uint8 RC_PARAM_MAP_NCHAN = 3 # 매핑 채널의 갯수를 3개로 제한
+uint8 PARAM_ID_LEN = 16 
 
-bool[3] valid		#true for RC-Param channels which are mapped to a param
-int32[3] param_index	# corresponding param index, this field is ignored if set to -1, in this case param_id will be used
+bool[3] valid		# RC-Param 채널이 param으로 매핑되는 경우 true
+int32[3] param_index	# 관련 param 인덱스로 이 필드는 -1로 설정된 경우 무시
 char[51] param_id	# MAP_NCHAN * (ID_LEN + 1) chars, corresponding param id, null terminated
-float32[3] scale		# scale to map the RC input [-1, 1] to a parameter value
-float32[3] value0		# initial value around which the parameter value is changed
-float32[3] value_min	# minimal parameter value
-float32[3] value_max	# minimal parameter value
+float32[3] scale		# RC 입력[-1, 1]을 parameter 값으로 스케일링
+float32[3] value0		# 초기값
+float32[3] value_min	# 최소 parameter 값
+float32[3] value_max	# 최대 parameter 값

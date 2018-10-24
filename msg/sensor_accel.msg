@@ -1,13 +1,13 @@
-uint64 integral_dt	# integration time
+uint64 integral_dt	# 적분 시간
 uint64 error_count
-float32 x		# acceleration in the NED X board axis in m/s^2
-float32 y		# acceleration in the NED Y board axis in m/s^2
-float32 z		# acceleration in the NED Z board axis in m/s^2
-float32 x_integral	# velocity in the NED X board axis in m/s over the integration time frame
-float32 y_integral	# velocity in the NED Y board axis in m/s over the integration time frame
-float32 z_integral	# velocity in the NED Z board axis in m/s over the integration time frame
-float32 temperature	# temperature in degrees celsius
-float32 range_m_s2	# range in m/s^2 (+- this value)
+float32 x		# NED X 보드 축에 대한 가속(m/s^2)
+float32 y		# NED Y 보드 축에 대한 가속(m/s^2)
+float32 z		# NED Z 보드 축에 대한 가속(m/s^2)
+float32 x_integral	# NED X 보드 축에 대한 속도(m/s)
+float32 y_integral	# NED Y 보드 축에 대한 속도(m/s)
+float32 z_integral	# NED Z 보드 축에 대한 속도(m/s)
+float32 temperature	# 온도
+float32 range_m_s2	# 범위 (m/s^2)
 float32 scaling
 
 int16 x_raw
@@ -15,4 +15,4 @@ int16 y_raw
 int16 z_raw
 int16 temperature_raw
 
-uint32 device_id	# unique device ID for the sensor that does not change between power cycles
+uint32 device_id	# 변경되지 않는 센서에 대해서 고유 장치 ID

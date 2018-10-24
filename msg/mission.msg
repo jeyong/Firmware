@@ -1,4 +1,4 @@
-uint8 dataman_id	# default 0, there are two offboard storage places in the dataman: 0 or 1
+uint8 dataman_id	# 기본값은 0이고, dataman에는 2개의 offboard 저장소가 있음
 
-uint16 count		# count of the missions stored in the dataman
-int32 current_seq	# default -1, start at the one changed latest
+uint16 count		# dataman에 저장된 mission의 카운트
+int32 current_seq	# 기본값은 -1이고 마지막에 변경된 것에서 시작

@@ -12,59 +12,59 @@ uint8 HIL_STATE_OFF = 0
 uint8 HIL_STATE_ON = 1
 
 # Navigation state, i.e. "what should vehicle do".
-uint8 NAVIGATION_STATE_MANUAL = 0		# Manual mode
-uint8 NAVIGATION_STATE_ALTCTL = 1		# Altitude control mode
-uint8 NAVIGATION_STATE_POSCTL = 2		# Position control mode
-uint8 NAVIGATION_STATE_AUTO_MISSION = 3		# Auto mission mode
-uint8 NAVIGATION_STATE_AUTO_LOITER = 4		# Auto loiter mode
-uint8 NAVIGATION_STATE_AUTO_RTL = 5		# Auto return to launch mode
-uint8 NAVIGATION_STATE_AUTO_RCRECOVER = 6	# RC recover mode
-uint8 NAVIGATION_STATE_AUTO_RTGS = 7		# Auto return to groundstation on data link loss
-uint8 NAVIGATION_STATE_AUTO_LANDENGFAIL = 8 	# Auto land on engine failure
-uint8 NAVIGATION_STATE_AUTO_LANDGPSFAIL = 9	# Auto land on gps failure (e.g. open loop loiter down)
-uint8 NAVIGATION_STATE_ACRO = 10		# Acro mode
+uint8 NAVIGATION_STATE_MANUAL = 0		# Manual 모드
+uint8 NAVIGATION_STATE_ALTCTL = 1		# Altitude 제어 모드
+uint8 NAVIGATION_STATE_POSCTL = 2		# Position 제어 모드
+uint8 NAVIGATION_STATE_AUTO_MISSION = 3		# Auto mission 모드
+uint8 NAVIGATION_STATE_AUTO_LOITER = 4		# Auto loiter 모드
+uint8 NAVIGATION_STATE_AUTO_RTL = 5		# Auto RTL 모드
+uint8 NAVIGATION_STATE_AUTO_RCRECOVER = 6	# RC recover 모드
+uint8 NAVIGATION_STATE_AUTO_RTGS = 7		# data link loss인 경우 자동 착륙
+uint8 NAVIGATION_STATE_AUTO_LANDENGFAIL = 8 	# 엔진 고장시 자동 착륙
+uint8 NAVIGATION_STATE_AUTO_LANDGPSFAIL = 9	# GPS 고장시 자동 착륙
+uint8 NAVIGATION_STATE_ACRO = 10		# Acro 모드
 uint8 NAVIGATION_STATE_UNUSED = 11		# Free slot
-uint8 NAVIGATION_STATE_DESCEND = 12		# Descend mode (no position control)
-uint8 NAVIGATION_STATE_TERMINATION = 13		# Termination mode
+uint8 NAVIGATION_STATE_DESCEND = 12		# Descend 모드 (position control이 없는 경우)
+uint8 NAVIGATION_STATE_TERMINATION = 13		# Termination 모드
 uint8 NAVIGATION_STATE_OFFBOARD = 14
-uint8 NAVIGATION_STATE_STAB = 15		# Stabilized mode
-uint8 NAVIGATION_STATE_RATTITUDE = 16		# Rattitude (aka "flip") mode
+uint8 NAVIGATION_STATE_STAB = 15		# Stabilized 모드
+uint8 NAVIGATION_STATE_RATTITUDE = 16		# Rattitude (aka "flip") 모드
 uint8 NAVIGATION_STATE_AUTO_TAKEOFF = 17	# Takeoff
 uint8 NAVIGATION_STATE_AUTO_LAND = 18		# Land
 uint8 NAVIGATION_STATE_AUTO_FOLLOW_TARGET = 19	# Auto Follow
-uint8 NAVIGATION_STATE_AUTO_PRECLAND = 20	# Precision land with landing target
+uint8 NAVIGATION_STATE_AUTO_PRECLAND = 20	# 정밀 착륙
 uint8 NAVIGATION_STATE_MAX = 21
 
 uint8 RC_IN_MODE_DEFAULT = 0
 uint8 RC_IN_MODE_OFF = 1
 uint8 RC_IN_MODE_GENERATED = 2
 
-# state machine / state of vehicle.
+# 상태 머신 / 비행체의 상태
 # Encodes the complete system state and is set by the commander app.
 
-uint8 nav_state				# set navigation state machine to specified value
-uint8 arming_state			# current arming state
-uint8 hil_state				# current hil state
-bool failsafe				# true if system is in failsafe state
+uint8 nav_state				# navigation 상태 머신을 특정 값으로 설정
+uint8 arming_state			# 현재 arming 상태
+uint8 hil_state				# 현재 hil 상태
+bool failsafe				# 시스템이 failsafe 상태면 true
 
-uint8 system_type			# system type, contains mavlink MAV_TYPE
-uint8 system_id			# system id, contains MAVLink's system ID field
-uint8 component_id			# subsystem / component id, contains MAVLink's component ID field
+uint8 system_type			# 시스템 타입(MAV_TYPE)
+uint8 system_id			# system id
+uint8 component_id			# subsystem / component id
 
-bool is_rotary_wing			# True if system is in rotary wing configuration, so for a VTOL this is only true while flying as a multicopter
-bool is_vtol				# True if the system is VTOL capable
-bool vtol_fw_permanent_stab		# True if VTOL should stabilize attitude for fw in manual mode
-bool in_transition_mode			# True if VTOL is doing a transition
-bool in_transition_to_fw		# True if VTOL is doing a transition from MC to FW
+bool is_rotary_wing			# 시스템이 rotary wing 설정인 경우 true
+bool is_vtol				# 시스템이 vtol인 경우 true
+bool vtol_fw_permanent_stab		# vtol이 manual 모드에서 자세 안정 모드를 사용하는 경우 true 
+bool in_transition_mode			# vtol이 전환하는 경우 true
+bool in_transition_to_fw		# vtol이 MC에서 FW로 전환하는 경우 true
 
-bool rc_signal_lost				# true if RC reception lost
-uint8 rc_input_mode				# set to 1 to disable the RC input, 2 to enable manual control to RC in mapping.
+bool rc_signal_lost				# RC 수신을 잃은 경우 true
+uint8 rc_input_mode				# RC 입력을 비활성화 시키는 경우 1로 설정하며 manual 제어를 RC 매핑으로 활성화하는 경우 2로 설정
 
-bool data_link_lost				# datalink to GCS lost
-bool high_latency_data_link_active 		# all low latency datalinks to GCS lost
+bool data_link_lost				# GCS와 datalink를 잃는 경우
+bool high_latency_data_link_active 		# GCS los에 대해서 low latency datlaink 허용
 uint8 data_link_lost_counter			# counts unique data link lost events
-bool engine_failure				# Set to true if an engine failure is detected
-bool mission_failure				# Set to true if mission could not continue/finish
+bool engine_failure				# 엔진이 고장을 탐지한 경우 true로 설정
+bool mission_failure				# 미션을 계속 진행할 수 없는 경우 true로 설정
 
 # see SYS_STATUS mavlink message for the following
 uint32 onboard_control_sensors_present
