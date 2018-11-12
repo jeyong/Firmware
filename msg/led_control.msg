@@ -25,9 +25,8 @@ uint8 MODE_FLASH = 7 # two fast blinks (on/off) with timing as in MODE_BLINK_FAS
 uint8 MAX_PRIORITY = 2 # maxium priority (minimum is 0)
 
 
-uint8 led_mask # bitmask which LED(s) to control, set to 0xff for all
-uint8 color # see COLOR_*
-uint8 mode # see MODE_*
-uint8 num_blinks # how many times to blink (number of on-off cycles if mode is one of MODE_BLINK_*) . Set to 0 for infinite
-                 # in MODE_FLASH it is the number of cycles. Max number of blinks: 122 and max number of flash cycles: 20
-uint8 priority # priority: higher priority events will override current lower priority events (see MAX_PRIORITY)
+uint8 led_mask # LED 제어를 위한 bitmask
+uint8 color # color 설정
+uint8 mode # mode 설정
+uint8 num_blinks # 깜빡이는 횟수
+uint8 priority # 우선순위
