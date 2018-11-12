@@ -14,10 +14,10 @@ uint16 ARM_AUTH_DENIED_REASON_BAD_WEATHER = 5
 
 uint32 ORB_QUEUE_LENGTH = 3
 
-uint16 command
-uint8 result
-bool from_external
-uint8 result_param1
-int32 result_param2
-uint8 target_system
-uint8 target_component
+uint16 command # 명령
+uint8 result  # 결과
+bool from_external  #외부에서 온 명령인지 여부
+uint8 result_param1   #결과 param1
+int32 result_param2   #결과 param2
+uint8 target_system   #target system
+uint8 target_component #target component
