@@ -87,26 +87,16 @@ class Mavlink
 {
 
 public:
-	/**
-	 * Constructor
-	 */
+	//생성자
 	Mavlink();
 
-	/**
-	 * Destructor, also kills the mavlinks task.
-	 */
+	// mavlink 태스트 종료
 	~Mavlink();
 
-	/**
-	* Start the mavlink task.
-	 *
-	 * @return		OK on success.
-	 */
+	 // mavlink 태스트 시작
 	static int		start(int argc, char *argv[]);
 
-	/**
-	 * Display the mavlink status.
-	 */
+	// mavlink 상태 표시
 	void			display_status();
 
 	static int		stream_command(int argc, char *argv[]);
@@ -146,18 +136,10 @@ public:
 
 	int			get_uart_fd();
 
-	/**
-	 * Get the MAVLink system id.
-	 *
-	 * @return		The system ID of this vehicle
-	 */
+	// mavlink system id
 	int			get_system_id();
 
-	/**
-	 * Get the MAVLink component id.
-	 *
-	 * @return		The component ID of this vehicle
-	 */
+	// mavlink component id
 	int			get_component_id();
 
 	const char *_device_name;
@@ -184,6 +166,7 @@ public:
 		FLOW_CONTROL_ON
 	};
 
+	// mavlink mode를 문자열로 반환
 	static const char *mavlink_mode_str(enum MAVLINK_MODE mode)
 	{
 		switch (mode) {
@@ -236,78 +219,36 @@ public:
 
 	bool			broadcast_enabled() { return _broadcast_mode > BROADCAST_MODE_OFF; }
 
-	/**
-	 * Set the boot complete flag on all instances
-	 *
-	 * Setting the flag unblocks parameter transmissions, which are gated
-	 * beforehand to ensure that the system is fully initialized.
-	 */
+	 // 시스템이 완전히 초기화되었는지를 확인
 	static void		set_boot_complete();
 
-	/**
-	 * Get the free space in the transmit buffer
-	 *
-	 * @return free space in the UART TX buffer
-	 */
+	// transmit 버퍼에 남은 공간 가져오기
 	unsigned		get_free_tx_buf();
 
 	static int		start_helper(int argc, char *argv[]);
 
-	/**
-	 * Enable / disable Hardware in the Loop simulation mode.
-	 *
-	 * @param hil_enabled	The new HIL enable/disable state.
-	 * @return		OK if the HIL state changed, ERROR if the
-	 *			requested change could not be made or was
-	 *			redundant.
-	 */
+	 // HI 활성화
 	int			set_hil_enabled(bool hil_enabled);
 
-	/**
-	 * Set manual input generation mode
-	 *
-	 * Set to true to generate RC_INPUT messages on the system bus from
-	 * MAVLink messages.
-	 *
-	 * @param generation_enabled If set to true, generate RC_INPUT messages
-	 */
+	// 수동 입력 생성 모드
 	void			set_manual_input_mode_generation(bool generation_enabled) { _generate_rc = generation_enabled; }
 
-	/**
-	 * Set communication protocol for this mavlink instance
-	 */
+	// mavlink 인스턴스에 대해서 통신 프로토콜 설정
 	void 			set_protocol(Protocol p) { _protocol = p; }
 
-	/**
-	 * Get the manual input generation mode
-	 *
-	 * @return true if manual inputs should generate RC data
-	 */
+	// 수동 입력 생성 모드 가져오기
 	bool			get_manual_input_mode_generation() { return _generate_rc; }
 
-
-	/**
-	 * This is the beginning of a MAVLINK_START_UART_SEND/MAVLINK_END_UART_SEND transaction
-	 */
+	// MAVLINK_START_UART_SEND/MAVLINK_END_UART_SEND 트랜잭션의 시작
 	void 			begin_send();
 
-	/**
-	 * Send bytes out on the link.
-	 *
-	 * On a network port these might actually get buffered to form a packet.
-	 */
+	// link에서 buf 내용 전송
 	void			send_bytes(const uint8_t *buf, unsigned packet_len);
 
-	/**
-	 * Flush the transmit buffer and send one MAVLink packet
-	 *
-	 * @return the number of bytes sent or -1 in case of error
-	 */
+	// 전송 버퍼 비우고 하나의 MAVLink 패킷 전송
 	int             	send_packet();
 
-	/**
-	 * Resend message as is, don't change sequence number and CRC.
-	 */
+	// 메시지 재전송의 경우 seq와 CRC를 변경하지 않음
 	void			resend_message(mavlink_message_t *msg) { _mavlink_resend_uart(_channel, msg); }
 
 	void			handle_message(const mavlink_message_t *msg);
@@ -316,11 +257,7 @@ public:
 
 	int			get_instance_id();
 
-	/**
-	 * Enable / disable hardware flow control.
-	 *
-	 * @param enabled	True if hardware flow control should be enabled
-	 */
+	// 하드웨어 flow control을 활성화
 	int			enable_flow_control(enum FLOW_CONTROL_MODE enabled);
 
 	mavlink_channel_t	get_channel();
@@ -331,46 +268,24 @@ public:
 
 	orb_advert_t		*get_mavlink_log_pub() { return &_mavlink_log_pub; }
 
-	/**
-	 * Send a status text with loglevel INFO
-	 *
-	 * @param string the message to send (will be capped by mavlink max string length)
-	 */
+	// log 레벨 정보로 status 정보를 전송
 	void			send_statustext_info(const char *string);
 
-	/**
-	 * Send a status text with loglevel CRITICAL
-	 *
-	 * @param string the message to send (will be capped by mavlink max string length)
-	 */
+	// log 레벨 CRITICL로 status 정보 전송
 	void			send_statustext_critical(const char *string);
 
-	/**
-	 * Send a status text with loglevel EMERGENCY
-	 *
-	 * @param string the message to send (will be capped by mavlink max string length)
-	 */
+	// log 레벨 EMERGENCY로 status 정보 전송
 	void			send_statustext_emergency(const char *string);
 
-	/**
-	 * Send a status text with loglevel, the difference from mavlink_log_xxx() is that message sent
-	 * only on this mavlink connection. Useful for reporting communication specific, not system-wide info
-	 * only to client interested in it. Message will be not sent immediately but queued in buffer as
-	 * for mavlink_log_xxx().
-	 *
-	 * @param string the message to send (will be capped by mavlink max string length)
-	 * @param severity the log level
-	 */
+	// 지정한 log 레벨로 status 정보를 전송. mavlink_log_xxx()와 차이점은 mavlink 연결 상에서만 전송되는 메시지.
+	// 즉시 전송하는 것이 아니라 mavlink_log_xxx()처럼 버퍼에 큐로 들어간 후에 전송
 	void			send_statustext(unsigned char severity, const char *string);
 
-	/**
-	 * Send the capabilities of this autopilot in terms of the MAVLink spec
-	 */
+	// MAVLink 스펙의 용어로 autopilot의 cap 정보를 전송
+	
 	void 			send_autopilot_capabilites();
 
-	/**
-	 * Send the protocol version of MAVLink
-	 */
+	// MAVLink 프로토콜 버전을 전송
 	void			send_protocol_version();
 
 	MavlinkStream 		*get_streams() const { return _streams; }
@@ -379,7 +294,7 @@ public:
 
 	float			get_baudrate() { return _baudrate; }
 
-	/* Functions for waiting to start transmission until message received. */
+	// 메시지 수진까지 트랜스미션 시작을 기다리는 동작
 	void			set_has_received_messages(bool received_messages) { _received_messages = received_messages; }
 	bool			get_has_received_messages() { return _received_messages; }
 	void			set_wait_to_transmit(bool wait) { _wait_to_transmit = wait; }
@@ -391,29 +306,19 @@ public:
 	void			lockMessageBufferMutex(void) { pthread_mutex_lock(&_message_buffer_mutex); }
 	void			unlockMessageBufferMutex(void) { pthread_mutex_unlock(&_message_buffer_mutex); }
 
-	/**
-	 * Count a transmission error
-	 */
+	// 전송 error 수
 	void			count_txerr();
 
-	/**
-	 * Count transmitted bytes
-	 */
+	// 전송된 byte 수
 	void			count_txbytes(unsigned n) { _bytes_tx += n; };
 
-	/**
-	 * Count bytes not transmitted because of errors
-	 */
+	// error로 인해 전송되지 않은 byte 수
 	void			count_txerrbytes(unsigned n) { _bytes_txerr += n; };
 
-	/**
-	 * Count received bytes
-	 */
+	// 수신한 byte 수
 	void			count_rxbytes(unsigned n) { _bytes_rx += n; };
 
-	/**
-	 * Get the receive status of this MAVLink link
-	 */
+	// MAVLink의 상태 수신
 	struct telemetry_status_s	&get_rx_status() { return _rstatus; }
 
 	ringbuffer::RingBuffer	*get_logbuffer() { return &_logbuffer; }
@@ -488,9 +393,6 @@ public:
 		float min_rtt;
 	};
 
-	/**
-	 * Get the ping statistics of this MAVLink link
-	 */
 	struct ping_statistics_s &get_ping_statistics() { return _ping_stats; }
 
 protected:
@@ -544,8 +446,8 @@ private:
 	int			_uart_fd;
 
 	int			_baudrate;
-	int			_datarate;		///< data rate for normal streams (attitude, position, etc.)
-	int			_datarate_events;	///< data rate for params, waypoints, text messages
+	int			_datarate;		///< 일반 stream에 대한 data rate (attitude, position, etc.)
+	int			_datarate_events;	///< params, waypoints, text 메시지에 대한 전송 속도
 	float			_rate_mult;
 	hrt_abstime		_last_hw_rate_timestamp;
 
@@ -593,7 +495,7 @@ private:
 	unsigned short _network_port;
 	unsigned short _remote_port;
 
-	struct telemetry_status_s	_rstatus;			///< receive status
+	struct telemetry_status_s	_rstatus;			// 수신 상태
 
 	struct ping_statistics_s	_ping_stats;		///< ping statistics
 
@@ -624,8 +526,8 @@ private:
 	unsigned		_system_type;
 	static bool		_config_link_on;
 
-	perf_counter_t		_loop_perf;			/**< loop performance counter */
-	perf_counter_t		_txerr_perf;			/**< TX error counter */
+	perf_counter_t		_loop_perf;			/**< loop 성능을 보기 위한 counter */
+	perf_counter_t		_txerr_perf;			/**< 전송 error counter */
 
 	void			mavlink_update_system();
 
@@ -639,11 +541,7 @@ private:
 
 	int configure_stream(const char *stream_name, const float rate = -1.0f);
 
-	/**
-	 * Adjust the stream rates based on the current rate
-	 *
-	 * @param multiplier if greater than 1, the transmission rate will increase, if smaller than one decrease
-	 */
+	// 현재 rate를 기반으로 stream 속도를 조정
 	void adjust_stream_rates(const float multiplier);
 
 	int message_buffer_init(int size);
@@ -660,26 +558,17 @@ private:
 
 	void pass_message(const mavlink_message_t *msg);
 
-	/**
-	 * Check the configuration of a connected radio
-	 *
-	 * This convenience function allows to re-configure a connected
-	 * radio without removing it from the main system harness.
-	 */
+	// 연결된 radio의 설정을 검사
 	void check_radio_config();
 
-	/**
-	 * Update rate mult so total bitrate will be equal to _datarate.
-	 */
+	// 전체 bitrate는 _datarate와 동일
 	void update_rate_mult();
 
 	void find_broadcast_address();
 
 	void init_udp();
 
-	/**
-	 * Main mavlink task.
-	 */
+	// mavlink task의 main
 	int		task_main(int argc, char *argv[]);
 
 	/* do not allow copying this class */

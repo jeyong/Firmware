@@ -90,14 +90,14 @@
 #error MAVLINK_CRC_EXTRA has to be defined on PX4 systems
 #endif
 
-// Guard against flow control misconfiguration
+// flow control 설정 문제 대비
 #if defined (CRTSCTS) && defined (__PX4_NUTTX) && (CRTSCTS != (CRTS_IFLOW | CCTS_OFLOW))
 #error The non-standard CRTSCTS define is incorrect. Fix this in the OS or replace with (CRTS_IFLOW | CCTS_OFLOW)
 #endif
 
 #define DEFAULT_REMOTE_PORT_UDP			14550 ///< GCS port per MAVLink spec
 #define DEFAULT_DEVICE_NAME			"/dev/ttyS1"
-#define MAX_DATA_RATE				10000000	///< max data rate in bytes/s
+#define MAX_DATA_RATE				10000000	///< 최대 데이터 속도 in bytes/s
 #define MAIN_LOOP_DELAY 			10000	///< 100 Hz @ 1000 bytes/s data rate
 #define FLOW_CONTROL_DISABLE_THRESHOLD		40	///< picked so that some messages still would fit it.
 //#define MAVLINK_PRINT_PACKETS
@@ -109,10 +109,12 @@ static Mavlink *_mavlink_instances = nullptr;
  *
  * @ingroup apps
  */
+ // mavlink 시작 함수
 extern "C" __EXPORT int mavlink_main(int argc, char *argv[]);
 
 extern mavlink_system_t mavlink_system;
 
+// mavlink uart 전송
 void mavlink_send_uart_bytes(mavlink_channel_t chan, const uint8_t *ch, int length)
 {
 	Mavlink *m = Mavlink::get_instance((unsigned)chan);
@@ -129,6 +131,7 @@ void mavlink_send_uart_bytes(mavlink_channel_t chan, const uint8_t *ch, int leng
 	}
 }
 
+// mavlink uart 전송 시작
 void mavlink_start_uart_send(mavlink_channel_t chan, int length)
 {
 	Mavlink *m = Mavlink::get_instance((unsigned)chan);
@@ -141,6 +144,7 @@ void mavlink_start_uart_send(mavlink_channel_t chan, int length)
 	}
 }
 
+// mavlink uart 전송 종료
 void mavlink_end_uart_send(mavlink_channel_t chan, int length)
 {
 	Mavlink *m = Mavlink::get_instance((unsigned)chan);
@@ -153,9 +157,7 @@ void mavlink_end_uart_send(mavlink_channel_t chan, int length)
 	}
 }
 
-/*
- * Internal function to give access to the channel status for each channel
- */
+// 각 채널에 대해서 채널 상태에 접근할 수 있는 내부 함수
 mavlink_status_t *mavlink_get_channel_status(uint8_t channel)
 {
 	Mavlink *m = Mavlink::get_instance((unsigned)channel);
@@ -168,9 +170,7 @@ mavlink_status_t *mavlink_get_channel_status(uint8_t channel)
 	}
 }
 
-/*
- * Internal function to give access to the channel buffer for each channel
- */
+// 각 채널에 대해서 채널 버퍼에 접근할 수 있는 내부 함수
 mavlink_message_t *mavlink_get_channel_buffer(uint8_t channel)
 {
 	Mavlink *m = Mavlink::get_instance((unsigned)channel);
