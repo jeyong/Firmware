@@ -114,7 +114,7 @@ uORB::DeviceMaster *uORB::Manager::get_device_master()
 int uORB::Manager::orb_exists(const struct orb_metadata *meta, int instance)
 {
 	/*
-	 * Generate the path to the node and try to open it.
+	 * node에 대한 path 생성 및 open 시도
 	 */
 	char path[orb_maxpath];
 	int inst = instance;
@@ -138,9 +138,8 @@ int uORB::Manager::orb_exists(const struct orb_metadata *meta, int instance)
 #endif
 
 	if (ret == 0) {
-		// we know the topic exists, but it's not necessarily advertised/published yet (for example
-		// if there is only a subscriber)
-		// The open() will not lead to memory allocations.
+		// topic이 있다는 것을 알지만 advertised나 publish가 안된 경우로 subscriber만 있는 경우
+		// open()에서 메모리 할당은 이뤄지지 않음
 		int fd = px4_open(path, 0);
 
 		if (fd >= 0) {
@@ -164,7 +163,7 @@ orb_advert_t uORB::Manager::orb_advertise_multi(const struct orb_metadata *meta,
 {
 #ifdef ORB_USE_PUBLISHER_RULES
 
-	// check publisher rule
+	// publish 방법 검사
 	if (_has_publisher_rules) {
 		const char *prog_name = px4_get_taskname();
 
@@ -188,8 +187,7 @@ orb_advert_t uORB::Manager::orb_advertise_multi(const struct orb_metadata *meta,
 
 	int result, fd;
 	orb_advert_t advertiser;
-
-	/* open the node as an advertiser */
+	// advertiser를 node로 열기
 	fd = node_open(meta, data, true, instance, priority);
 
 	if (fd == PX4_ERROR) {
@@ -197,16 +195,14 @@ orb_advert_t uORB::Manager::orb_advertise_multi(const struct orb_metadata *meta,
 		return nullptr;
 	}
 
-	/* Set the queue size. This must be done before the first publication; thus it fails if
-	 * this is not the first advertiser.
-	 */
+	// queue 크기 설정. 처음 publication 전에 완료해야만 함. 처음 advertiser가 아닌 경우 실패.
 	result = px4_ioctl(fd, ORBIOCSETQUEUESIZE, (unsigned long)queue_size);
 
 	if (result < 0 && queue_size > 1) {
 		PX4_WARN("orb_advertise_multi: failed to set queue size");
 	}
 
-	/* get the advertiser handle and close the node */
+	// advertiser handle을 얻어서 node를 닫기
 	result = px4_ioctl(fd, ORBIOCGADVERTISER, (unsigned long)&advertiser);
 	px4_close(fd);
 
@@ -215,10 +211,10 @@ orb_advert_t uORB::Manager::orb_advertise_multi(const struct orb_metadata *meta,
 		return nullptr;
 	}
 
-	//For remote systems call over and inform them
+	// remote system call에 대해서 알림
 	uORB::DeviceNode::topic_advertised(meta, priority);
 
-	/* the advertiser must perform an initial publish to initialise the object */
+	// advertiser는 object를 초기화하기 위해서 반드시 초기 publish를 수행해야만 함. 
 	result = orb_publish(meta, advertiser, data);
 
 	if (result == PX4_ERROR) {
@@ -291,7 +287,7 @@ int uORB::Manager::orb_copy(const struct orb_metadata *meta, int handle, void *b
 
 int uORB::Manager::orb_check(int handle, bool *updated)
 {
-	/* Set to false here so that if `px4_ioctl` fails to false. */
+	// false초기화하여 px4_ioctl 수행
 	*updated = false;
 	return px4_ioctl(handle, ORBIOCUPDATED, (unsigned long)(uintptr_t)updated);
 }
@@ -329,7 +325,7 @@ int uORB::Manager::node_advertise
 	int fd = -1;
 	int ret = PX4_ERROR;
 
-	/* fill advertiser data */
+	// advertiser 데이터 채우기
 	const struct orb_advertdata adv = { meta, instance, priority };
 
 	/* open the control device */
@@ -339,10 +335,10 @@ int uORB::Manager::node_advertise
 		goto out;
 	}
 
-	/* advertise the object */
+	// 해당 object를 advertise하기
 	ret = px4_ioctl(fd, ORBIOCADVERTISE, (unsigned long)(uintptr_t)&adv);
 
-	/* it's PX4_OK if it already exists */
+	// 이미 존재하느 ㄴ경우 PX4_OK 반환
 	if ((PX4_OK != ret) && (EEXIST == errno)) {
 		ret = PX4_OK;
 	}
@@ -362,29 +358,22 @@ int uORB::Manager::node_open(const struct orb_metadata *meta, const void *data, 
 	char path[orb_maxpath];
 	int fd = -1, ret;
 
-	/*
-	 * If meta is null, the object was not defined, i.e. it is not
-	 * known to the system.  We can't advertise/subscribe such a thing.
-	 */
+	// meta가 null인 경우 object는 정의되어 있지 않음. 시스템이 모르기 때문에 advertise/subscribe를 할 수 없음.
 	if (nullptr == meta) {
 		errno = ENOENT;
 		return PX4_ERROR;
 	}
 
-	/*
-	 * Advertiser must publish an initial value.
-	 */
+	// advertiser는 반드시 초기 값을 publish 해야만 함
+
 	if (advertiser && (data == nullptr)) {
 		errno = EINVAL;
 		return PX4_ERROR;
 	}
 
-	/* if we have an instance and are an advertiser, we will generate a new node and set the instance,
-	 * so we do not need to open here */
+	// instance를 가지고 있는 경우 새로운 node를 생성하고 instance를 설정. 여기서 open할 필요는 없음
 	if (!instance || !advertiser) {
-		/*
-		 * Generate the path to the node and try to open it.
-		 */
+		// node에 대한 path 생성하고 open 시도
 		ret = uORB::Utils::node_mkpath(path, meta, instance);
 
 		if (ret != OK) {
@@ -392,21 +381,21 @@ int uORB::Manager::node_open(const struct orb_metadata *meta, const void *data, 
 			return PX4_ERROR;
 		}
 
-		/* open the path as either the advertiser or the subscriber */
+		// path를 advertiser나 subscriber로 open
 		fd = px4_open(path, advertiser ? PX4_F_WRONLY : PX4_F_RDONLY);
 
 	} else {
 		*instance = 0;
 	}
 
-	/* we may need to advertise the node... */
+	// node를 advertise
 	if (fd < 0) {
 
-		/* try to create the node */
+		// node 생성
 		ret = node_advertise(meta, instance, priority);
 
 		if (ret == PX4_OK) {
-			/* update the path, as it might have been updated during the node_advertise call */
+			// path를 업데이트해서 node_advertise 호출하는 동안 업데이트 되도록
 			ret = uORB::Utils::node_mkpath(path, meta, instance);
 
 			if (ret != PX4_OK) {
@@ -414,30 +403,19 @@ int uORB::Manager::node_open(const struct orb_metadata *meta, const void *data, 
 				return PX4_ERROR;
 			}
 		}
-
-		/* on success, try the open again */
+		// 성공시 다시 open 시도
 		if (ret == PX4_OK) {
 			fd = px4_open(path, (advertiser) ? PX4_F_WRONLY : PX4_F_RDONLY);
 		}
 	}
 
-	/*
-	 else if (advertiser) {
-		 * We have a valid fd and are an advertiser.
-		 * This can happen if the topic is already subscribed/published, and orb_advertise() is called,
-		 * where instance==nullptr.
-		 * We would need to set the priority here (via px4_ioctl(fd, ...) and a new IOCTL), but orb_advertise()
-		 * uses ORB_PRIO_DEFAULT, and a subscriber also creates the node with ORB_PRIO_DEFAULT. So we don't need
-		 * to do anything here.
-	 }
-	 */
 
 	if (fd < 0) {
 		errno = EIO;
 		return PX4_ERROR;
 	}
 
-	/* everything has been OK, we can return the handle now */
+	// 모든 동작이 OK인 경우, handle을 반환
 	return fd;
 }
 
@@ -516,13 +494,13 @@ int16_t uORB::Manager::process_remove_subscription(const char *messageName)
 	if (ret == OK && device_master) {
 		uORB::DeviceNode *node = device_master->getDeviceNode(nodepath);
 
-		// get the node name.
+		// node 이름 얻기
 		if (node == nullptr) {
 			PX4_DEBUG("[posix-uORB::Manager::process_remove_subscription(%d)]Error No existing subscriber found for message: [%s]",
 				  __LINE__, messageName);
 
 		} else {
-			// node is present.
+			// node가 있는 경우
 			node->process_remove_subscription();
 			rc = 0;
 		}

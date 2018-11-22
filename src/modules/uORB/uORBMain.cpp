@@ -80,6 +80,7 @@ $ uorb top
 	PRINT_MODULE_USAGE_ARG("<filter1> [<filter2>]", "topic(s) to match (implies -a)", true);
 }
 
+//uorb 모듈 start/stop 구동 
 int
 uorb_main(int argc, char *argv[])
 {
@@ -88,23 +89,19 @@ uorb_main(int argc, char *argv[])
 		return -EINVAL;
 	}
 
-	/*
-	 * Start/load the driver.
-	 */
 	if (!strcmp(argv[1], "start")) {
 
-		if (g_dev != nullptr) {
+		if (g_dev != nullptr) { // 이미 구동 중
 			PX4_WARN("already loaded");
-			/* user wanted to start uorb, its already running, no error */
 			return 0;
 		}
 
-		if (!uORB::Manager::initialize()) {
+		if (!uORB::Manager::initialize()) { //uorb manager 할당 실패
 			PX4_ERR("uorb manager alloc failed");
 			return -ENOMEM;
 		}
 
-		/* create the driver */
+		// driver 생성
 		g_dev = uORB::Manager::get_instance()->get_device_master();
 
 		if (g_dev == nullptr) {
@@ -122,7 +119,7 @@ uorb_main(int argc, char *argv[])
 	}
 
 	/*
-	 * Print driver information.
+	 * driver 정보 출력
 	 */
 	if (!strcmp(argv[1], "status")) {
 		if (g_dev != nullptr) {
