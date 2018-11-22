@@ -1756,7 +1756,7 @@ Mavlink::task_main(int argc, char *argv[])
 
 	while ((ch = px4_getopt(argc, argv, "b:r:d:u:o:m:t:fwxz", &myoptind, &myoptarg)) != EOF) {
 		switch (ch) {
-		case 'b':
+		case 'b': //baudrate 설정
 			_baudrate = strtoul(myoptarg, nullptr, 10);
 
 			if (_baudrate < 9600 || _baudrate > 3000000) {
@@ -1766,7 +1766,7 @@ Mavlink::task_main(int argc, char *argv[])
 
 			break;
 
-		case 'r':
+		case 'r': // data rate 설정
 			_datarate = strtoul(myoptarg, nullptr, 10);
 
 			if (_datarate < 10 || _datarate > MAX_DATA_RATE) {
@@ -1776,7 +1776,7 @@ Mavlink::task_main(int argc, char *argv[])
 
 			break;
 
-		case 'd':
+		case 'd': //프로토콜 시리얼로 설정
 			_device_name = myoptarg;
 			set_protocol(SERIAL);
 			break;
@@ -1837,7 +1837,7 @@ Mavlink::task_main(int argc, char *argv[])
 //			mavlink_link_termination_allowed = true;
 //			break;
 
-		case 'm':
+		case 'm': // mavlink 모드 설정
 			if (strcmp(myoptarg, "custom") == 0) {
 				_mode = MAVLINK_MODE_CUSTOM;
 
@@ -1903,7 +1903,7 @@ Mavlink::task_main(int argc, char *argv[])
 		_datarate = MAX_DATA_RATE;
 	}
 
-	if (get_protocol() == SERIAL) {
+	if (get_protocol() == SERIAL) { // 시리얼 프로토콜을 사용하는 경우
 		if (Mavlink::instance_exists(_device_name, this)) {
 			PX4_ERR("%s already running", _device_name);
 			return PX4_ERROR;
@@ -1912,9 +1912,11 @@ Mavlink::task_main(int argc, char *argv[])
 		PX4_INFO("mode: %s, data rate: %d B/s on %s @ %dB",
 			 mavlink_mode_str(_mode), _datarate, _device_name, _baudrate);
 
+		// 표준 출력에 있는 내용 비우기
 		/* flush stdout in case MAVLink is about to take it over */
 		fflush(stdout);
 
+		// 인자에 대한 기본 값
 		/* default values for arguments */
 		_uart_fd = mavlink_open_uart(_baudrate, _device_name, _force_flow_control);
 
@@ -1937,6 +1939,7 @@ Mavlink::task_main(int argc, char *argv[])
 			 mavlink_mode_str(_mode), _datarate, _network_port, _remote_port);
 	}
 
+	// 전송 mutex 초기화
 	/* initialize send mutex */
 	pthread_mutex_init(&_send_mutex, nullptr);
 
@@ -1966,8 +1969,7 @@ Mavlink::task_main(int argc, char *argv[])
 	uint64_t status_time = 0;
 	MavlinkOrbSubscription *ack_sub = add_orb_subscription(ORB_ID(vehicle_command_ack));
 	uint64_t ack_time = 0;
-	/* We don't want to miss the first advertise of an ACK, so we subscribe from the
-	 * beginning and not just when the topic exists. */
+	// 처음 ACK 놓치기 않기 위해서 시작지점에 subscribe 수행
 	ack_sub->subscribe_from_beginning(true);
 	cmd_sub->subscribe_from_beginning(true);
 
@@ -1979,6 +1981,7 @@ Mavlink::task_main(int argc, char *argv[])
 	struct vehicle_status_s status;
 	status_sub->update(&status_time, &status);
 
+	// 기본적으로 데이터 전송을 활성화 (IRIDIUM 모드인 경우 패키지의 첫번째 라운드가 전송된 후에 비활성화 처리)
 	/* Activate sending the data by default (for the IRIDIUM mode it will be disabled after the first round of packages is sent)*/
 	_transmitting_enabled = true;
 	_transmitting_enabled_commanded = true;
@@ -2001,7 +2004,7 @@ Mavlink::task_main(int argc, char *argv[])
 
 	}
 
-	switch (_mode) {
+	switch (_mode) { // 모드에 따라 stream 종류가 결정
 	case MAVLINK_MODE_NORMAL:
 		configure_stream("ADSB_VEHICLE");
 		configure_stream("ALTITUDE", 1.0f);
@@ -2151,19 +2154,23 @@ Mavlink::task_main(int argc, char *argv[])
 		break;
 	}
 
+	// CPU 오버헤드 최소화를 위한 data rate에 따른 main loop delay 설정
 	/* set main loop delay depending on data rate to minimize CPU overhead */
 	_main_loop_delay = (MAIN_LOOP_DELAY * 1000) / _datarate;
 
+	// delay 값 하한
 	/* hard limit to 1000 Hz at max */
 	if (_main_loop_delay < MAVLINK_MIN_INTERVAL) {
 		_main_loop_delay = MAVLINK_MIN_INTERVAL;
 	}
 
+	// delay 값 상한
 	/* hard limit to 100 Hz at least */
 	if (_main_loop_delay > MAVLINK_MAX_INTERVAL) {
 		_main_loop_delay = MAVLINK_MAX_INTERVAL;
 	}
 
+	// instance는 초기화를 마침
 	/* now the instance is fully initialized and we can bump the instance count */
 	LL_APPEND(_mavlink_instances, this);
 
@@ -2172,29 +2179,32 @@ Mavlink::task_main(int argc, char *argv[])
 		init_udp();
 	}
 
-	/* if the protocol is serial, we send the system version blindly */
+	// 시리얼인 경우 시스템 버전을 전송
 	if (get_protocol() == SERIAL) {
 		send_autopilot_capabilites();
 	}
 
+	// Mavlink Receiver 구동
 	/* start the MAVLink receiver last to avoid a race */
 	MavlinkReceiver::receive_start(&_receive_thread, this);
 
+	// main 루프 동작 부분
 	while (!_task_should_exit) {
-		/* main loop */
+
 		usleep(_main_loop_delay);
 
 		perf_begin(_loop_perf);
 
 		hrt_abstime t = hrt_absolute_time();
-
+		// rate를 업데이트 
 		update_rate_mult();
 
 		if (param_sub->update(&param_time, nullptr)) {
-			/* parameters updated */
+			// 파라미터 업데이트
 			mavlink_update_system();
 		}
 
+		// 라디오 설정 검사
 		check_radio_config();
 
 		if (status_sub->update(&status_time, &status)) {
@@ -2223,7 +2233,7 @@ Mavlink::task_main(int argc, char *argv[])
 		if (cmd_sub->update(&cmd_time, &vehicle_cmd)) {
 			if ((vehicle_cmd.command == vehicle_command_s::VEHICLE_CMD_CONTROL_HIGH_LATENCY) &&
 			    (_mode == MAVLINK_MODE_IRIDIUM)) {
-				if (vehicle_cmd.param1 > 0.5f) {
+				if (vehicle_cmd.param1 > 0.5f) { // 0.5 이상인 경우 
 					if (!_transmitting_enabled) {
 						mavlink_and_console_log_info(&_mavlink_log_pub, "Enable transmitting with IRIDIUM mavlink on device %s by command",
 									     _device_name);
@@ -2264,7 +2274,7 @@ Mavlink::task_main(int argc, char *argv[])
 			}
 		}
 
-		/* send command ACK */
+		// command ack 전송
 		uint16_t current_command_ack = 0;
 		struct vehicle_command_ack_s command_ack;
 
@@ -2293,7 +2303,7 @@ Mavlink::task_main(int argc, char *argv[])
 			_logbuffer.put(&mavlink_log);
 		}
 
-		/* check for shell output */
+		// shell 출력에 대한 검사
 		if (_mavlink_shell && _mavlink_shell->available() > 0) {
 			if (get_free_tx_buf() >= MAVLINK_MSG_ID_SERIAL_CONTROL_LEN + MAVLINK_NUM_NON_PAYLOAD_BYTES) {
 				mavlink_serial_control_t msg;
@@ -2306,7 +2316,7 @@ Mavlink::task_main(int argc, char *argv[])
 			}
 		}
 
-		/* check for ulog streaming messages */
+		// ulog streaming 메시지 검사
 		if (_mavlink_ulog) {
 			if (_mavlink_ulog_stop_requested) {
 				_mavlink_ulog->stop();
@@ -2331,6 +2341,7 @@ Mavlink::task_main(int argc, char *argv[])
 			}
 		}
 
+		// 요청한 subscription을 검사
 		/* check for requested subscriptions */
 		if (_subscribe_to_stream != nullptr) {
 			if (OK == configure_stream(_subscribe_to_stream, _subscribe_to_stream_rate)) {
@@ -2497,33 +2508,33 @@ Mavlink::task_main(int argc, char *argv[])
 
 void Mavlink::check_radio_config()
 {
-	/* radio config check */
+	// 라디오 설정 검사
 	if (_uart_fd >= 0 && _radio_id != 0 && _rstatus.type == telemetry_status_s::TELEMETRY_STATUS_RADIO_TYPE_3DR_RADIO) {
+		// 라디오 설정 요청 및 라디오 여부
 		/* request to configure radio and radio is present */
 		FILE *fs = fdopen(_uart_fd, "w");
 
 		if (fs) {
-			/* switch to AT command mode */
+			// AT 명령 모드로 스위치
 			usleep(1200000);
 			fprintf(fs, "+++\n");
 			usleep(1200000);
 
 			if (_radio_id > 0) {
-				/* set channel */
+				// 채널 설정
 				fprintf(fs, "ATS3=%u\n", _radio_id);
 				usleep(200000);
 
 			} else {
-				/* reset to factory defaults */
+				// 팩토리 기본으로 리셋
 				fprintf(fs, "AT&F\n");
 				usleep(200000);
 			}
-
-			/* write config */
+			// 설정 쓰기
 			fprintf(fs, "AT&W");
 			usleep(200000);
 
-			/* reboot */
+			// 리부팅
 			fprintf(fs, "ATZ");
 			usleep(200000);
 
@@ -2540,6 +2551,7 @@ void Mavlink::check_radio_config()
 			PX4_WARN("open fd %d failed", _uart_fd);
 		}
 
+		// 파라미터 리슷 및 저장
 		/* reset param and save */
 		_radio_id = 0;
 		param_set_no_notification(_param_radio_id, &_radio_id);
@@ -2548,7 +2560,7 @@ void Mavlink::check_radio_config()
 
 int Mavlink::start_helper(int argc, char *argv[])
 {
-	/* create the instance in task context */
+	// 인스턴스 생성
 	Mavlink *instance = new Mavlink();
 
 	int res;
@@ -2585,14 +2597,11 @@ Mavlink::start(int argc, char *argv[])
 		return 1;
 	}
 
-	// Instantiate thread
+	// thread 시작
 	char buf[24];
 	sprintf(buf, "mavlink_if%d", ic);
 
-	// This is where the control flow splits
-	// between the starting task and the spawned
-	// task - start_helper() only returns
-	// when the started task exits.
+	// task를 시작
 	px4_task_spawn_cmd(buf,
 			   SCHED_DEFAULT,
 			   SCHED_PRIORITY_DEFAULT,
@@ -2600,17 +2609,10 @@ Mavlink::start(int argc, char *argv[])
 			   (px4_main_t)&Mavlink::start_helper,
 			   (char *const *)argv);
 
-	// Ensure that this shell command
-	// does not return before the instance
-	// is fully initialized. As this is also
-	// the only path to create a new instance,
-	// this is effectively a lock on concurrent
-	// instance starting. XXX do a real lock.
-
-	// Sleep 500 us between each attempt
+	// 매번 500 us sleep
 	const unsigned sleeptime = 500;
 
-	// Wait 100 ms max for the startup.
+	// 구동시 최대 100ms 동안 대기
 	const unsigned limit = 100 * 1000 / sleeptime;
 
 	unsigned count = 0;
@@ -2623,6 +2625,7 @@ Mavlink::start(int argc, char *argv[])
 	return OK;
 }
 
+// 현재 상태 출력
 void
 Mavlink::display_status()
 {
@@ -2811,6 +2814,7 @@ Mavlink::stream_command(int argc, char *argv[])
 	return OK;
 }
 
+// 부팅 완료시 호출
 void
 Mavlink::set_boot_complete()
 {
@@ -2907,23 +2911,29 @@ int mavlink_main(int argc, char *argv[])
 	}
 
 	if (!strcmp(argv[1], "start")) {
+		//Mavlink 시작
 		return Mavlink::start(argc, argv);
 
 	} else if (!strcmp(argv[1], "stop")) {
+		//stop 대신 stop-all 사용해야함
 		PX4_WARN("mavlink stop is deprecated, use stop-all instead");
 		usage();
 		return 1;
 
 	} else if (!strcmp(argv[1], "stop-all")) {
+		//모든 instance 제거
 		return Mavlink::destroy_all_instances();
 
 	} else if (!strcmp(argv[1], "status")) {
+		//mavlink 상태 정보
 		return Mavlink::get_status_all_instances();
 
 	} else if (!strcmp(argv[1], "stream")) {
+		//mavlink stream 정보 
 		return Mavlink::stream_command(argc, argv);
 
 	} else if (!strcmp(argv[1], "boot_complete")) {
+		// 부팅 완료 
 		Mavlink::set_boot_complete();
 		return 0;
 
