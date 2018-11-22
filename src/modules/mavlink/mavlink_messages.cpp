@@ -134,6 +134,7 @@ void get_mavlink_navigation_mode(const struct vehicle_status_s *const status, ui
 		*mavlink_base_mode |= MAV_MODE_FLAG_HIL_ENABLED;
 	}
 
+	// base mode를 설정
 	/* arming state */
 	if (status->arming_state == vehicle_status_s::ARMING_STATE_ARMED) {
 		*mavlink_base_mode |= MAV_MODE_FLAG_SAFETY_ARMED;
@@ -146,7 +147,7 @@ void get_mavlink_navigation_mode(const struct vehicle_status_s *const status, ui
 					  | MAV_MODE_FLAG_STABILIZE_ENABLED
 					  | MAV_MODE_FLAG_GUIDED_ENABLED;
 
-	switch (status->nav_state) {
+	switch (status->nav_state) { // 네비게이션 상태에 따라서 base 모드 설정
 	case vehicle_status_s::NAVIGATION_STATE_MANUAL:
 		*mavlink_base_mode	|= MAV_MODE_FLAG_MANUAL_INPUT_ENABLED
 					   | (status->is_rotary_wing ? MAV_MODE_FLAG_STABILIZE_ENABLED : 0);
@@ -266,7 +267,7 @@ void get_mavlink_mode_state(const struct vehicle_status_s *const status, uint8_t
 	get_mavlink_navigation_mode(status, mavlink_base_mode, &custom_mode);
 	*mavlink_custom_mode = custom_mode.data;
 
-	/* set system state */
+	// vehicle status에 따라 시스템 상태를 설정
 	if (status->arming_state == vehicle_status_s::ARMING_STATE_INIT
 	    || status->arming_state == vehicle_status_s::ARMING_STATE_IN_AIR_RESTORE
 	    || status->arming_state == vehicle_status_s::ARMING_STATE_STANDBY_ERROR) {	// TODO review
@@ -286,11 +287,11 @@ void get_mavlink_mode_state(const struct vehicle_status_s *const status, uint8_t
 	}
 }
 
-
+// MavlinkStreamHeartbeat class 정의
 class MavlinkStreamHeartbeat : public MavlinkStream
 {
 public:
-	const char *get_name() const
+	const char *get_name() const  // char형 이름 반환
 	{
 		return MavlinkStreamHeartbeat::get_name_static();
 	}
@@ -300,7 +301,7 @@ public:
 		return "HEARTBEAT";
 	}
 
-	static uint16_t get_id_static()
+	static uint16_t get_id_static() // HEARTBEAT의 MAVLINK_MSG_ID
 	{
 		return MAVLINK_MSG_ID_HEARTBEAT;
 	}
@@ -315,18 +316,18 @@ public:
 		return new MavlinkStreamHeartbeat(mavlink);
 	}
 
-	unsigned get_size()
+	unsigned get_size() // 메시지 크기
 	{
 		return MAVLINK_MSG_ID_HEARTBEAT_LEN + MAVLINK_NUM_NON_PAYLOAD_BYTES;
 	}
 
-	bool const_rate()
+	bool const_rate()  // 고정 속도
 	{
 		return true;
 	}
 
 private:
-	MavlinkOrbSubscription *_status_sub;
+	MavlinkOrbSubscription *_status_sub;  // vehicle status를 수집
 
 	/* do not allow top copying this class */
 	MavlinkStreamHeartbeat(MavlinkStreamHeartbeat &) = delete;
@@ -337,13 +338,13 @@ protected:
 		_status_sub(_mavlink->add_orb_subscription(ORB_ID(vehicle_status)))
 	{}
 
-	bool send(const hrt_abstime t)
+	bool send(const hrt_abstime t)  // HEARTBEAT 메시지 전송
 	{
 		struct vehicle_status_s status = {};
 
-		/* always send the heartbeat, independent of the update status of the topics */
+		// vehicle status의 토픽을 수신하여 
 		if (!_status_sub->update(&status)) {
-			/* if topic update failed fill it with defaults */
+			// topic 업데이트가 실패하는 경우 기본값으로 채우기
 			memset(&status, 0, sizeof(status));
 		}
 
@@ -359,10 +360,11 @@ protected:
 	}
 };
 
+//MavlinkStreamStatustext stream 클래스
 class MavlinkStreamStatustext : public MavlinkStream
 {
 public:
-	const char *get_name() const
+	const char *get_name() const  // 이름
 	{
 		return MavlinkStreamStatustext::get_name_static();
 	}
@@ -372,7 +374,7 @@ public:
 		return "STATUSTEXT";
 	}
 
-	static uint16_t get_id_static()
+	static uint16_t get_id_static() // MAVLINK id
 	{
 		return MAVLINK_MSG_ID_STATUSTEXT;
 	}
@@ -381,7 +383,7 @@ public:
 	{
 		return get_id_static();
 	}
-
+	// class 인스턴스 생성
 	static MavlinkStream *new_instance(Mavlink *mavlink)
 	{
 		return new MavlinkStreamStatustext(mavlink);
@@ -401,6 +403,7 @@ protected:
 	explicit MavlinkStreamStatustext(Mavlink *mavlink) : MavlinkStream(mavlink)
 	{}
 
+	// mavlink 메시지 전송
 	bool send(const hrt_abstime t)
 	{
 		if (!_mavlink->get_logbuffer()->empty() && _mavlink->is_connected()) {
@@ -409,7 +412,7 @@ protected:
 
 			if (_mavlink->get_logbuffer()->get(&mavlink_log)) {
 
-				mavlink_statustext_t msg;
+				mavlink_statustext_t msg;  //mavlink statustext 메시지 
 				msg.severity = mavlink_log.severity;
 				strncpy(msg.text, (const char *)mavlink_log.text, sizeof(msg.text));
 				msg.text[sizeof(msg.text) - 1] = '\0';

@@ -1940,21 +1940,18 @@ Mavlink::task_main(int argc, char *argv[])
 	}
 
 	// 전송 mutex 초기화
-	/* initialize send mutex */
 	pthread_mutex_init(&_send_mutex, nullptr);
 
-	/* if we are passing on mavlink messages, we need to prepare a buffer for this instance */
+	// mavlink 메시지를 전달하는 경우, 해당 instance에 대해서 buffer 준비가 필요
 	if (_forwarding_on) {
-		/* initialize message buffer if multiplexing is on.
-		 * make space for two messages plus off-by-one space as we use the empty element
-		 * marker ring buffer approach.
-		 */
+		// 멀티플렉싱이 on이면 메시지 buf를 초기화
+		// 2개 메시지에 대해서 공간 만들기
 		if (OK != message_buffer_init(2 * sizeof(mavlink_message_t) + 1)) {
 			PX4_ERR("msg buf alloc fail");
 			return 1;
 		}
 
-		/* initialize message buffer mutex */
+		// 메시지 버퍼 mutex 초기화
 		pthread_mutex_init(&_message_buffer_mutex, nullptr);
 	}
 
@@ -1982,7 +1979,6 @@ Mavlink::task_main(int argc, char *argv[])
 	status_sub->update(&status_time, &status);
 
 	// 기본적으로 데이터 전송을 활성화 (IRIDIUM 모드인 경우 패키지의 첫번째 라운드가 전송된 후에 비활성화 처리)
-	/* Activate sending the data by default (for the IRIDIUM mode it will be disabled after the first round of packages is sent)*/
 	_transmitting_enabled = true;
 	_transmitting_enabled_commanded = true;
 
@@ -1990,16 +1986,15 @@ Mavlink::task_main(int argc, char *argv[])
 		_transmitting_enabled_commanded = false;
 	}
 
-	/* add default streams depending on mode */
+	// 모드에 따라 기본 stream 추가
 	if (_mode != MAVLINK_MODE_IRIDIUM) {
-
-		/* HEARTBEAT is constant rate stream, rate never adjusted */
+		// HEARTBEAT는 일정한 속도의 stream으로 조절하지 않음
 		configure_stream("HEARTBEAT", 1.0f);
 
-		/* STATUSTEXT stream is like normal stream but gets messages from logbuffer instead of uORB */
+		// STATUSTEXT stream은 일반 stream이랑 유사하지만 uoRB 대신 logbuffer로부터 메시지를 얻는다
 		configure_stream("STATUSTEXT", 20.0f);
 
-		/* COMMAND_LONG stream: use unlimited rate to send all commands */
+		// COMMAND_LONG stream은 모든 명령을 보내기 위해서 rate 제약을 두지 않음
 		configure_stream("COMMAND_LONG");
 
 	}
@@ -2342,7 +2337,6 @@ Mavlink::task_main(int argc, char *argv[])
 		}
 
 		// 요청한 subscription을 검사
-		/* check for requested subscriptions */
 		if (_subscribe_to_stream != nullptr) {
 			if (OK == configure_stream(_subscribe_to_stream, _subscribe_to_stream_rate)) {
 				if (fabsf(_subscribe_to_stream_rate) > 0.00001f) {
@@ -2376,13 +2370,13 @@ Mavlink::task_main(int argc, char *argv[])
 			_subscribe_to_stream = nullptr;
 		}
 
-		/* update streams */
+		// stream을 업데이트
 		MavlinkStream *stream;
 		LL_FOREACH(_streams, stream) {
 			stream->update(t);
 		}
 
-		/* pass messages from other UARTs */
+		// 다른 UART로부터 메시지 전달
 		if (_forwarding_on) {
 
 			bool is_part;
@@ -2394,12 +2388,12 @@ Mavlink::task_main(int argc, char *argv[])
 			pthread_mutex_unlock(&_message_buffer_mutex);
 
 			if (available > 0) {
-				// Reconstruct message from buffer
+				// 버퍼로부터 메시지 재구성
 
 				mavlink_message_t msg;
 				write_ptr = (uint8_t *)&msg;
 
-				// Pull a single message from the buffer
+				// 해당 버퍼로부터 단일 메시지 가져오기
 				size_t read_count = available;
 
 				if (read_count > sizeof(mavlink_message_t)) {
@@ -2430,7 +2424,7 @@ Mavlink::task_main(int argc, char *argv[])
 			}
 		}
 
-		/* update TX/RX rates*/
+		// TX/RX rate를 업데이트
 		if (t > _bytes_timestamp + 1000000) {
 			if (_bytes_timestamp != 0) {
 				float dt = (t - _bytes_timestamp) / 1000.0f;
@@ -2450,14 +2444,14 @@ Mavlink::task_main(int argc, char *argv[])
 		/* confirm task running only once fully initialized */
 		_task_running = true;
 	}
-
+	
 	/* first wait for threads to complete before tearing down anything */
 	pthread_join(_receive_thread, nullptr);
 
 	delete _subscribe_to_stream;
 	_subscribe_to_stream = nullptr;
 
-	/* delete streams */
+	// stream 삭제
 	MavlinkStream *stream_to_del = nullptr;
 	MavlinkStream *stream_next = _streams;
 
@@ -2469,7 +2463,7 @@ Mavlink::task_main(int argc, char *argv[])
 
 	_streams = nullptr;
 
-	/* delete subscriptions */
+	// subscriptions 삭제
 	MavlinkOrbSubscription *sub_to_del = nullptr;
 	MavlinkOrbSubscription *sub_next = _subscriptions;
 
