@@ -119,14 +119,12 @@ using namespace sensors;
 
 /**
  * 실제 온도는 baro 센서에서 가져온 값보다 훨씬 낮으므로, 전원이 켜지면 PCB 보드가 열을 받는 것을 고려해서 5도 정도를 빼주는 방식으로 처리.
- * HACK - true temperature is much less than indicated temperature in baro,
- * subtract 5 degrees in an attempt to account for the electrical upheating of the PCB
  */
 #define PCB_TEMP_ESTIMATE_DEG		5.0f
 #define STICK_ON_OFF_LIMIT		0.75f
 
 /**
- * Sensor app start / stop handling function
+ * Sensor app 시작/종료 처리 함수
  *
  * @ingroup apps
  */
@@ -157,21 +155,21 @@ public:
 	int print_status() override;
 
 private:
-	DevHandle 	_h_adc;				/**< ADC driver handle */
+	DevHandle 	_h_adc;				/**< ADC 드라이버 핸들 */
 
-	hrt_abstime	_last_adc{0};			/**< last time we took input from the ADC */
+	hrt_abstime	_last_adc{0};			/**< 마지막으로 ADC로부터 입력을 받은 시간 */
 
-	const bool	_hil_enabled;			/**< if true, HIL is active */
-	bool		_armed{false};				/**< arming status of the vehicle */
+	const bool	_hil_enabled;			/**< true이면 HIL 활성화 */
+	bool		_armed{false};				/**< vehicle의 arming 상태 */
 
 	int		_actuator_ctrl_0_sub{-1};		/**< attitude controls sub */
 	int		_diff_pres_sub{-1};			/**< raw differential pressure subscription */
 	int		_vcontrol_mode_sub{-1};		/**< vehicle control mode subscription */
-	int 		_params_sub{-1};			/**< notification of parameter updates */
+	int 		_params_sub{-1};			/**< parameter 업데이트 여부 확인을 위해 */
 
-	orb_advert_t	_sensor_pub{nullptr};			/**< combined sensor data topic */
-	orb_advert_t	_airdata_pub{nullptr};			/**< combined sensor data topic */
-	orb_advert_t	_magnetometer_pub{nullptr};			/**< combined sensor data topic */
+	orb_advert_t	_sensor_pub{nullptr};			/**< combined sensor 정보 topic */
+	orb_advert_t	_airdata_pub{nullptr};			/**< combined sensor 정보 topic */
+	orb_advert_t	_magnetometer_pub{nullptr};			/**< combined sensor 정보 topic */
 
 #if BOARD_NUMBER_BRICKS > 0
 	orb_advert_t	_battery_pub[BOARD_NUMBER_BRICKS] {};			/**< battery status */
@@ -183,21 +181,21 @@ private:
 	int 			_battery_pub_intance0ndx {0}; /**< track the index of instance 0 */
 #endif /* BOARD_NUMBER_BRICKS > 1 */
 
-	orb_advert_t	_airspeed_pub{nullptr};			/**< airspeed */
+	orb_advert_t	_airspeed_pub{nullptr};			/**< 풍속 */
 	orb_advert_t	_sensor_preflight{nullptr};		/**< sensor preflight topic */
 
-	perf_counter_t	_loop_perf;			/**< loop performance counter */
+	perf_counter_t	_loop_perf;			/**< 성능 측정을 위한 변수 */
 
-	DataValidator	_airspeed_validator;		/**< data validator to monitor airspeed */ // airspeed를 모니터할때 data 유효성 검증
+	DataValidator	_airspeed_validator;		/**< 풍속을 모니터링 하기 위한 data validator */ // airspeed를 모니터할때 data 유효성 검증
 
 #ifdef ADC_AIRSPEED_VOLTAGE_CHANNEL
 	differential_pressure_s	_diff_pres {};
 
-	orb_advert_t	_diff_pres_pub{nullptr};			/**< differential_pressure */
+	orb_advert_t	_diff_pres_pub{nullptr};			/**< 기압차 */
 #endif /* ADC_AIRSPEED_VOLTAGE_CHANNEL */
 
-	Parameters		_parameters{};			/**< local copies of interesting parameters */
-	ParameterHandles	_parameter_handles{};		/**< handles for interesting parameters */
+	Parameters		_parameters{};			/**< parameter 복사 */
+	ParameterHandles	_parameter_handles{};		/**< parameter 핸들 */
 
 	RCUpdate		_rc_update;
 	VotedSensorsUpdate _voted_sensors_update;
@@ -205,43 +203,31 @@ private:
 
 	/**
 	 * parameter를 업데이트
-	 * Update our local parameter cache.
 	 */
 	int		parameters_update();
 
 	/**
 	 * adc관련 초기화 수행. adc path 핸들 얻기
-	 * Do adc-related initialisation.
 	 */
 	int		adc_init();
 
 	/**
 	 * subscribe해서 얻어온 값으로 계산하여 airdata 채우기
-	 * Poll the differential pressure sensor for updated data.
-	 *
-	 * @param raw			Combined sensor data structure into which
-	 *				data should be returned.
 	 */
 	void		diff_pres_poll(const vehicle_air_data_s &airdata);
 
 	/**
 	 * vehicle control mode 정보를 subscribe해서 변경사항 검사
-	 * Check for changes in vehicle control mode.
 	 */
 	void		vehicle_control_mode_poll();
 
 	/**
 	 * parameter 변경 사항 검사
-	 * Check for changes in parameters.
 	 */
 	void 		parameter_update_poll(bool forced = false);
 
 	/**
 	 * ADC를 계속 읽어서 suit로 업데이트
-	 * Poll the ADC and update readings to suit.
-	 *
-	 * @param raw			Combined sensor data structure into which
-	 *				data should be returned.
 	 */
 	void		adc_poll();
 };
@@ -275,7 +261,6 @@ Sensors::parameters_update()
 	}
 
 	// parameter를 값을 읽어서 _parameter로 복사
-	/* read the parameter values into _parameters */
 	int ret = update_parameters(_parameter_handles, _parameters);
 
 	if (ret) {
@@ -401,23 +386,20 @@ Sensors::parameter_update_poll(bool forced)
 {
 	bool param_updated = false;
 
-	/* Check if any parameter has changed */
+	// 파라미터 변경이 있었는지 검사
 	orb_check(_params_sub, &param_updated);
 
 	if (param_updated || forced) {
-		/* read from param to clear updated flag */
 		struct parameter_update_s update;
 		orb_copy(ORB_ID(parameter_update), _params_sub, &update);
 
 		parameters_update();
 		updateParams();
 
-		// airspeed scale값이 parameter에 있으므로 update한 값을 반영하기 위해서 
-		/* update airspeed scale */
+		// airspeed scale값이 parameter에 있으므로 update한 값을 반영하기 위해서
 		int fd = px4_open(AIRSPEED0_DEVICE_PATH, 0);
 
 		// airspeed 센서는 옵션이라 장착된 경우인지 체크 후 파라미터에 설정된 scale값을 사용
-		/* this sensor is optional, abort without error */
 		if (fd >= 0) {
 			struct airspeed_scale airscale = {
 				_parameters.diff_pres_offset_pa,
@@ -446,44 +428,31 @@ Sensors::adc_poll()
 	/* rate limit to 100 Hz */
 	if (t - _last_adc >= 10000) { // 10ms 이상 지날때 마다  실행되도록 (너무 자주 실행되지 않도록)
 		// 최대 12개 채널 정보를 한방에 담을 수 있도록 공간 만들기
-		/* make space for a maximum of twelve channels (to ensure reading all channels at once) */
 		px4_adc_msg_t buf_adc[PX4_MAX_ADC_CHANNELS];
 		
 		// 버퍼에 모든 채널값을 한방에 읽어오기
-		/* read all channels available */
 		int ret = _h_adc.read(&buf_adc, sizeof(buf_adc));
 
 #if BOARD_NUMBER_BRICKS > 0
 		//todo:abosorb into new class Power
 
 		// 배터리 정보를 위해서 battery_status를 publish. 
-		/* For legacy support we publish the battery_status for the Battery that is
-		 * associated with the Brick that is the selected source for VDD_5V_IN
-		 * Selection is done in HW ala a LTC4417 or similar, or may be hard coded
-		 * Like in the FMUv4
-		 */
 
 		// 각 brick에 해당하는 ADC 채널 초기화.
-		/* The ADC channels that  are associated with each brick, in power controller
-		 * priority order highest to lowest, as defined by the board config.
-		 */
+		
 		int   bat_voltage_v_chan[BOARD_NUMBER_BRICKS] = BOARD_BATT_V_LIST; // voltage 채널
 		int   bat_voltage_i_chan[BOARD_NUMBER_BRICKS] = BOARD_BATT_I_LIST; // current 채널
 
 		// 유효 신호(hw에 따라)는 각 blick과 관련되어 있음.
-		/* The valid signals (HW dependent) are associated with each brick */
+		
 		bool  valid_chan[BOARD_NUMBER_BRICKS] = BOARD_BRICK_VALID_LIST; // 유효한 blick인지 신호를 받기 위한 채널
 
 		// brick마다 읽지 않은 채널의 경우 0으로 초기화
-		/* Per Brick readings with default unread channels at 0 */
+		
 		float bat_current_a[BOARD_NUMBER_BRICKS] = {0.0f};
 		float bat_voltage_v[BOARD_NUMBER_BRICKS] = {0.0f};
 
 		// 유효한 채널 중에서, VDD_5V_IN에 대한 소스는 선택한 가장 낮은 index(우선 순위가 가장 높은)를 사용. 0보다 작은 경우 선택된 것이 없다는 뜻. 
-		/* Based on the valid_chan, used to indicate the selected the lowest index
-		 * (highest priority) supply that is the source for the VDD_5V_IN
-		 * When < 0 none selected
-		 */
 
 		int selected_source = -1;
 
@@ -496,8 +465,6 @@ Sensors::adc_poll()
 #ifdef ADC_AIRSPEED_VOLTAGE_CHANNEL
 
 				if (ADC_AIRSPEED_VOLTAGE_CHANNEL == buf_adc[i].am_channel) {
-
-					/* calculate airspeed, raw is the difference from */
 					const float voltage = (float)(buf_adc[i].am_data) * 3.3f / 4096.0f * 2.0f;  // V_ref/4096 * (voltage divider factor)
 
 					/**
@@ -527,9 +494,6 @@ Sensors::adc_poll()
 
 					for (int b = 0; b < BOARD_NUMBER_BRICKS; b++) { // 연결된 brick 갯수 만큼
 						// 아직 선택된 source가 없는 경우, pub이 가능하고 유효한 채널인 경우 이를 VDD_5V_IN 으로 선택.
-						/* Once we have subscriptions, Do this once for the lowest (highest priority
-						 * supply on power controller) that is valid.
-						 */
 						if (_battery_pub[b] != nullptr && selected_source < 0 && valid_chan[b]) {
 							/* Indicate the lowest brick (highest priority supply on power controller)
 							 * that is valid as the one that is the selected source for the
@@ -540,7 +504,6 @@ Sensors::adc_poll()
 #if BOARD_NUMBER_BRICKS > 1
 
 							// selected_source가 instance 0이 아닌 경우 _battery_pub_intance0ndx로 이동 
-							/* Move the selected_source to instance 0 */
 							if (_battery_pub_intance0ndx != selected_source) {
 
 								orb_advert_t tmp_h = _battery_pub[_battery_pub_intance0ndx];
@@ -553,11 +516,8 @@ Sensors::adc_poll()
 						}
 
 						// 특정 채널을 찾아서 raw voltage 값에서 측정 데이터로 
-						// todo:per brick scaling
-						/* look for specific channels and process the raw voltage to measurement data */
 						if (bat_voltage_v_chan[b] == buf_adc[i].am_channel) {
 							// am_data는 ADC convert result로 여기에 scaling값을 곱해서 voltage 값을 얻는다. 여기에 battery_v_div로 나눠주면 전압을 구함.
-							/* Voltage in volts */
 							bat_voltage_v[b] = (buf_adc[i].am_data * _parameters.battery_voltage_scaling) * _parameters.battery_v_div;
 
 						} else if (bat_voltage_i_chan[b] == buf_adc[i].am_channel) { // am_data가 전류로 ADC convert 결과인 경우, 
@@ -576,14 +536,9 @@ Sensors::adc_poll()
 				for (int b = 0; b < BOARD_NUMBER_BRICKS; b++) {
 
 					// BOARD_ADC_OPEN_CIRCUIT_V 보다 측정한 전압이 큰 경우 brick이 연결되었다고 판단
-					/* Consider the brick connected if there is a voltage */
 					bool connected = bat_voltage_v[b] > BOARD_ADC_OPEN_CIRCUIT_V;
 
 					// BOARD_ADC_OPEN_CIRCUIT_V가 BOARD_VALID_UV보다 큰 경우 해당 채널이 유효한지 여부 체크
-					/* In the case where the BOARD_ADC_OPEN_CIRCUIT_V is
-					 * greater than the BOARD_VALID_UV let the HW qualify that it
-					 * is connected.
-					 */
 					if (BOARD_ADC_OPEN_CIRCUIT_V > BOARD_VALID_UV) {
 						connected &= valid_chan[b];
 					}
@@ -683,23 +638,16 @@ Sensors::run()
 	while (!should_exit()) {
 
 		// 선택된 gyro의 fd
-		/* use the best-voted gyro to pace output */
 		poll_fds.fd = _voted_sensors_update.best_gyro_fd();
 
 		// 최대 50ms 까지 기다리다가 실패하는 경우 sensor값들을 초기화 시킨다.
-		/* wait for up to 50ms for data (Note that this implies, we can have a fail-over time of 50ms,
-		 * if a gyro fails) */
 		int pret = px4_poll(&poll_fds, 1, 50);
 
 		/* if pret == 0 it timed out - periodic check for should_exit(), etc. */
 
 		// polling이 실패한 이유는 gyro 센서가 아직 유휴하지 않은 경우, 다시 subscribe 시도해보자.
-		/* this is undesirable but not much we can do - might want to flag unhappy status */
 		if (pret < 0) {
 			// gyro 센서 갯수가 제대로 인식이 안된 경우 센서 초기화를 시도
-			/* if the polling operation failed because no gyro sensor is available yet,
-			 * then attempt to subscribe once again
-			 */
 			if (_voted_sensors_update.num_gyros() == 0) {
 				_voted_sensors_update.initialize_sensors();
 			}
@@ -712,12 +660,9 @@ Sensors::run()
 		perf_begin(_loop_perf);
 
 		// vehicle_control_mode를 subscription하여 armed 상태를 얻어 온다.
-		/* check vehicle status for changes to publication state */
 		vehicle_control_mode_poll();
 
 		// raw 구조체의 timestamp는 gyro_poll()에서 업데이트 (이때 gyro를 필수 센서로 만들어준다.)
-		/* the timestamp of the raw struct is updated by the gyro_poll() method (this makes the gyro
-		 * a mandatory sensor) */
 		const uint64_t airdata_prev_timestamp = airdata.timestamp;
 		const uint64_t magnetometer_prev_timestamp = magnetometer.timestamp;
 
@@ -725,7 +670,6 @@ Sensors::run()
 		_voted_sensors_update.sensors_poll(raw, airdata, magnetometer);
 
 		// 배터리 전압 체크
-		/* check battery voltage */
 		adc_poll();
 
 		// baro 센서로부터 raw 데이터 받아서 airdata 채우기
@@ -761,10 +705,7 @@ Sensors::run()
 			}
 		}
 
-		// arm이 아닌 경우고 0.5초가 지난 경우. ??
-		/* keep adding sensors as long as we are not armed,
-		 * when not adding sensors poll for param updates
-		 */
+		// arm이 아닌 경우고 0.5초가 지난 경우. 
 		if (!_armed && hrt_elapsed_time(&last_config_update) > 500 * 1000) {
 			_voted_sensors_update.initialize_sensors();
 			last_config_update = hrt_absolute_time();
@@ -779,7 +720,6 @@ Sensors::run()
 		}
 
 		// 새로운 rc 입력 데이터를 가져오기
-		/* Look for new r/c input data */
 		_rc_update.rc_poll(_parameter_handles);
 
 		perf_end(_loop_perf);

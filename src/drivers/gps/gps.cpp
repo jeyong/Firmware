@@ -91,7 +91,7 @@
 #define GPS_WAIT_BEFORE_READ	20		// ms, wait before reading to save read() calls // read() 호출이 정상적으로 동작하기 위해서 읽기 동작 전에 20ms 대기
 
 
-/* struct for dynamic allocation of satellite info data */
+// 위성 정보 데이터를 동적 할당하기 위한 구조체
 struct GPS_Sat_Info {
 	struct satellite_info_s 	_data;
 };
@@ -101,7 +101,7 @@ class GPS : public ModuleBase<GPS>
 {
 public:
 
-	/** The GPS allows to run multiple instances */
+	// GPS는 여러 instance 실행이 가능
 	enum class Instance : uint8_t {
 		Main = 0,
 		Secondary,
@@ -116,7 +116,7 @@ public:
 	/** @see ModuleBase */
 	static int task_spawn(int argc, char *argv[]);
 
-	/** spawn task and select the instance */
+	// task 생성 및 instance 선택
 	static int task_spawn(int argc, char *argv[], Instance instance);
 
 	/** @see ModuleBase */
@@ -130,22 +130,18 @@ public:
 	/** @see ModuleBase */
 	static int print_usage(const char *reason = nullptr);
 
-	/**
-	 * task spawn trampoline for the secondary GPS
-	 */
+	// 2번째 GPS에 대한 task의 실행
 	static int run_trampoline_secondary(int argc, char *argv[]);
 
 	/** @see ModuleBase::run() */
 	void run() override;
 
-	/**
-	 * Diagnostics - print some basic information about the driver.
-	 */
+	// driver에 대한 기본 정보 출력
 	int print_status() override;
 
 private:
 
-	int				_serial_fd;					///< serial interface to GPS // GPS serial fd 
+	int				_serial_fd;					///<  GPS의 시리얼 인터페이스 // GPS serial fd 
 	unsigned			_baudrate;					///< current baudrate // 현재 baudrate
 	char				_port[20];					///< device / serial port path // serial 포트 path
 	bool				_healthy;					///< flag to signal if the GPS is ok // GPS가 정상인지 여부
@@ -174,33 +170,27 @@ private:
 	gps_dump_s *_dump_to_device;   	// GPS로 보내는 데이터
 	gps_dump_s *_dump_from_device;  // GPS로부터 받은 데이터
 
-	static volatile bool _is_gps_main_advertised; ///< for the second gps we want to make sure that it gets instance 1
-	/// and thus we wait until the first one publishes at least one message.
-	// 2번째 gps는 instance 1을 가져야하므로 첫번째 gps가 최소한 하나의 메시지를 publish할때까지 기다리기
+	static volatile bool _is_gps_main_advertised; // 2번째 gps는 instance 1을 가져야하므로 첫번째 gps가 최소한 하나의 메시지를 publish할때까지 기다리기
 	static volatile GPS *_secondary_instance;
 
 
 	/**
 	 * GPS 설정, GPS로 가는 통신 처리
-	 * Try to configure the GPS, handle outgoing communication to the GPS
 	 */
 	void config();
 
 	/**
 	 * UART의 baudrate 설정 (GPS와 통신 속도)
-	 * Set the baudrate of the UART to the GPS
 	 */
 	int set_baudrate(unsigned baud);
 
 	/**
 	 * GPS에게 reset 명령 보내기 
-	 * Send a reset command to the GPS
 	 */
 	void cmd_reset();
 
 	/**
 	 * gps 정보를 publish
-	 * Publish the gps struct
 	 */
 	void 				publish();
 
@@ -212,36 +202,21 @@ private:
 
 	/**
 	 * 시리얼 장치에서 사용하는 poll에 대한 추상화
-	 * This is an abstraction for the poll on serial used.
-	 *
-	 * @param buf: pointer to read buffer // read 버퍼의 포인터
-	 * @param buf_length: size of read buffer // read 버퍼의 크기
-	 * @param timeout: timeout in ms // ms단위 timeout 시간
-	 * @return: 0 for nothing read, or poll timed out // 0 : 읽을 것이 없거나 timeout, 음수 : error, 양수 : 읽은 byte 수
-	 *	    < 0 for error
-	 *	    > 0 number of bytes read
 	 */
 	int pollOrRead(uint8_t *buf, size_t buf_length, int timeout);
 
 	/**
 	 * 새로운 inject data topic이 있는지 검사하고 이를 처리
-	 * check for new messages on the inject data topic & handle them
 	 */
 	void handleInjectDataTopic();
 
 	/**
 	 * data를 gps에 보내기 (RTCM stream)
-	 * send data to the device, such as an RTCM stream
-	 * @param data
-	 * @param len
 	 */
 	inline bool injectData(uint8_t *data, size_t len);
 
 	/**
 	 * baudrate 설정
-	 * set the Baudrate
-	 * @param baud
-	 * @return 0 on success, <0 on error
 	 */
 	int setBaudrate(unsigned baud);
 
@@ -252,10 +227,6 @@ private:
 
 	/**
 	 * msg_to_gps_device가 true이면 gps 장치로 메시지 보내고 false이면 gps에서 메시지를 받음
-	 * Dump gps communication.
-	 * @param data message
-	 * @param len length of the message
-	 * @param msg_to_gps_device if true, this is a message sent to the gps device, otherwise it's from the device
 	 */
 	void dumpGpsData(uint8_t *data, size_t len, bool msg_to_gps_device);
 
@@ -295,12 +266,12 @@ GPS::GPS(const char *path, gps_driver_mode_t mode, GPSHelper::Interface interfac
 	_dump_to_device(nullptr),
 	_dump_from_device(nullptr)
 {
-	/* store port name */
+	// 포트 이름 저장
 	strncpy(_port, path, sizeof(_port));
-	/* enforce null termination */
+	// 마지막에 null을 강제로 삽입
 	_port[sizeof(_port) - 1] = '\0';
 
-	/* create satellite info data object if requested */
+	// 위성 정보 데이터 객체 생성
 	if (enable_sat_info) {
 		_sat_info = new GPS_Sat_Info();
 		_p_report_sat_info = &_sat_info->_data;
@@ -417,12 +388,6 @@ int GPS::pollOrRead(uint8_t *buf, size_t buf_length, int timeout)
 			 * 여기 진입한 경우 polling을 통해서 데이터가 있는 상태,
 			 * 따라서 read() 호출에 시간이 많이 걸리므로 1-2 byte 정도 들어온 경우 바로 읽어들이지 않고 delay를 둔다.
 			 * 요청한 data가 온전히 온 경우에는 delay 없이 바로 읽기
-			 * 
-			 * We are here because poll says there is some data, so this
-			 * won't block even on a blocking device. But don't read immediately
-			 * by 1-2 bytes, wait for some more data to save expensive read() calls.
-			 * If we have all requested data available, read it without waiting.
-			 * If more bytes are available, we'll go back to poll() again.
 			 */
 #ifdef __PX4_NUTTX
 			int err = 0;
@@ -474,9 +439,6 @@ void GPS::handleInjectDataTopic()
 			 * gps 장치로 메시지를 쓰기. 메시지가 조각으로 나뉘어져 있더라도 동작 중에는 그냥 gps 장치로 보내기.
 			 * 별도로 message를 온전한 상태로 만들 필요 없음. 
 			 * 즉 받은 조각 data 그대로 쓰기
-			 * Write the message to the gps device. Note that the message could be fragmented.
-			 * But as we don't write anywhere else to the device during operation, we don't
-			 * need to assemble the message first.
 			 */
 			injectData(msg.data, msg.len);
 
@@ -530,7 +492,6 @@ int GPS::setBaudrate(unsigned baud)
 	/* properly configure the terminal (see also https://en.wikibooks.org/wiki/Serial_Programming/termios ) */
 
 	// 입력 관련 처리 끄기
-	// Input flags - Turn off input processing
 	//
 	// convert break to null byte, no CR to NL translation,
 	// no NL to CR translation, don't mark parity errors or breaks
@@ -540,7 +501,6 @@ int GPS::setBaudrate(unsigned baud)
 	uart_config.c_iflag &= ~(IGNBRK | BRKINT | ICRNL |
 				 INLCR | PARMRK | INPCK | ISTRIP | IXON);
 	// 출력 관련 처리 끄기
-	// Output flags - Turn off output processing
 	//
 	// no CR to NL translation, no NL to CR-NL translation,
 	// no NL to CR translation, no column 0 CR suppression,
@@ -552,7 +512,6 @@ int GPS::setBaudrate(unsigned baud)
 	uart_config.c_oflag = 0;
 
 	// newline 처리 끄기
-	// No line processing
 	//
 	// echo off, echo newline off, canonical mode off,
 	// extended input processing off, signal chars off
@@ -562,7 +521,7 @@ int GPS::setBaudrate(unsigned baud)
 	/* no parity, one stop bit, disable flow control */
 	uart_config.c_cflag &= ~(CSTOPB | PARENB | CRTSCTS);
 
-	/* set baud rate */
+	// baud 속도 설정
 	if ((termios_state = cfsetispeed(&uart_config, speed)) < 0) { // input 속도
 		GPS_ERR("ERR: %d (cfsetispeed)", termios_state);
 		return -1;
@@ -744,20 +703,14 @@ GPS::run()
 			// Ashtech 드라이버는 실제 설정에 문제가 있어도 성공되었다고 나오는 문제 있음.
 			// MTK 드라이버는 테스트 제대로 안되었음.
 			// 현재 UBlox 드라이버만 제대로 테스트 되어 신뢰할 수 있음. 
-			/* the Ashtech driver lies about successful configuration and the
-			 * MTK driver is not well tested, so we really only trust the UBX
-			 * driver for an advance publication
-			 */
 			// UBloxDriver의 configure() 호출
 			if (_helper && _helper->configure(_baudrate, GPSHelper::OutputMode::GPS) == 0) {
 
 				// report 초기화
-				/* reset report */
 				memset(&_report_gps_pos, 0, sizeof(_report_gps_pos));
 
 				if (_mode == GPS_DRIVER_MODE_UBX) {
 					// 여기 들어오는 경우 GPS가 정상적으로 검색된 상태로, 실제로 읽기 동작 전에 사용하는 변수들 초기화 수행
-					/* GPS is obviously detected successfully, reset statistics */
 					_helper->resetUpdateRates();
 				}
 
@@ -776,7 +729,6 @@ GPS::run()
 					}
 
 					// 5초마다 update rate를 측정 (RATE_MEASUREMENT_PERIOD는 5초로 설정)
-					/* measure update rate every 5 seconds */
 					if (hrt_absolute_time() - last_rate_measurement > RATE_MEASUREMENT_PERIOD) {
 						float dt = (float)((hrt_absolute_time() - last_rate_measurement)) / 1000000.0f;
 						_rate = last_rate_count / dt;
