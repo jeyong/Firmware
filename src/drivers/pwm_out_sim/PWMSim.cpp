@@ -163,7 +163,7 @@ PWMSim::run()
 
 	/* advertise the mixed control outputs, insist on the first group output */
 	_outputs_pub = orb_advertise(ORB_ID(actuator_outputs), &_actuator_outputs);
-
+    _hangkong_pub = orb_advertise(ORB_ID(actuator_outputs), &_actuator_outputs);
 	update_params();
 	int params_sub = orb_subscribe(ORB_ID(parameter_update));
 
@@ -292,6 +292,17 @@ PWMSim::run()
 			_actuator_outputs.timestamp = hrt_absolute_time();
 			orb_publish(ORB_ID(actuator_outputs), _outputs_pub, &_actuator_outputs);
 
+			hangkong_s hangkong_outputs = {};
+			_mixers->get_mixerinfo(hangkong_outputs.raw_controls, hangkong_outputs.after_controls, hangkong_outputs.mixer_controls);
+
+			if (_hangkong_pub == nullptr) {
+				_hangkong_pub = orb_advertise(ORB_ID(hangkong), &hangkong_outputs);
+			} else {
+				orb_publish(ORB_ID(hangkong), _hangkong_pub, &hangkong_outputs);
+			}
+			print_mixerinfo(&hangkong_outputs);
+
+
 			// use first valid timestamp_sample for latency tracking
 			for (int i = 0; i < actuator_controls_s::NUM_ACTUATOR_CONTROL_GROUPS; i++) {
 				const bool required = _groups_required & (1 << i);
@@ -339,6 +350,13 @@ PWMSim::run()
 
 	orb_unsubscribe(_armed_sub);
 	orb_unsubscribe(params_sub);
+}
+
+void PWMSim::print_mixerinfo(hangkong_s* m)
+{
+	PX4_INFO("raw: %f, %f, %f, %f", (double)m->raw_controls[0], (double)m->raw_controls[1], (double)m->raw_controls[2], (double)m->raw_controls[3]);
+	PX4_INFO("after: %f, %f, %f, %f", (double)m->after_controls[0], (double)m->after_controls[1], (double)m->after_controls[2], (double)m->after_controls[3]);
+	PX4_INFO("mixer: %f, %f, %f, %f, %f, %f", (double)m->mixer_controls[0], (double)m->mixer_controls[1], (double)m->mixer_controls[2], (double)m->mixer_controls[3], (double)m->mixer_controls[4], (double)m->mixer_controls[5]);
 }
 
 int
@@ -517,6 +535,7 @@ PWMSim::ioctl(device::file_t *filp, int cmd, unsigned long arg)
 
 			SimpleMixer *mixer = new SimpleMixer(control_callback, (uintptr_t)&_controls, mixinfo);
 
+			PX4_INFO("simple mixer loadbuf");
 			if (mixer->check()) {
 				delete mixer;
 				_groups_required = 0;
@@ -538,6 +557,7 @@ PWMSim::ioctl(device::file_t *filp, int cmd, unsigned long arg)
 			const char *buf = (const char *)arg;
 			unsigned buflen = strnlen(buf, 1024);
 
+			PX4_INFO("mixer loadbuf");
 			if (_mixers == nullptr) {
 				_mixers = new MixerGroup(control_callback, (uintptr_t)&_controls);
 			}

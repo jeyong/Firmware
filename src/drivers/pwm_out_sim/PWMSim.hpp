@@ -51,6 +51,7 @@
 #include <uORB/topics/actuator_controls.h>
 #include <uORB/topics/actuator_outputs.h>
 #include <uORB/topics/parameter_update.h>
+#include <uORB/topics/hangkong.h>
 
 class PWMSim : public device::CDev, public ModuleBase<PWMSim>
 {
@@ -69,6 +70,8 @@ public:
 
 	PWMSim();
 	virtual ~PWMSim();
+
+    void print_mixerinfo(hangkong_s* m);
 
 	/** @see ModuleBase */
 	static int task_spawn(int argc, char *argv[]);
@@ -113,6 +116,7 @@ private:
 
 	actuator_outputs_s _actuator_outputs = {};
 	orb_advert_t	_outputs_pub{nullptr};
+    orb_advert_t _hangkong_pub;
 
 	unsigned	_num_outputs{0};
 
