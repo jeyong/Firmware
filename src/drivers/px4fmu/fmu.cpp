@@ -141,6 +141,8 @@ public:
 		MODE_6CAP,
 	};
 	PX4FMU(bool run_as_task);
+	void print_mixerinfo(hangkong_s* m);
+
 	virtual ~PX4FMU();
 
 	/** @see ModuleBase */
@@ -1189,7 +1191,12 @@ PX4FMU::run()
 
 	cycle();
 }
-
+void PX4FMU::print_mixerinfo(hangkong_s* m)
+{
+	PX4_INFO("raw: %f, %f, %f, %f", (double)m->raw_controls[0], (double)m->raw_controls[1], (double)m->raw_controls[2], (double)m->raw_controls[3]);
+	PX4_INFO("after: %f, %f, %f, %f", (double)m->after_controls[0], (double)m->after_controls[1], (double)m->after_controls[2], (double)m->after_controls[3]);
+	PX4_INFO("mixer: %f, %f, %f, %f, %f, %f", (double)m->mixer_controls[0], (double)m->mixer_controls[1], (double)m->mixer_controls[2], (double)m->mixer_controls[3], (double)m->mixer_controls[4], (double)m->mixer_controls[5]);
+}
 void
 PX4FMU::cycle()
 {
@@ -1376,6 +1383,7 @@ PX4FMU::cycle()
 				} else {
 					orb_publish(ORB_ID(hangkong), _hangkong_pub, &hangkong_outputs);
 				}
+				print_mixerinfo(&hangkong_outputs);
 
 				/* publish mixer status */
 				MultirotorMixer::saturation_status saturation_status;
