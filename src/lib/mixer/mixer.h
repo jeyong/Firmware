@@ -140,6 +140,14 @@
 class __EXPORT Mixer
 {
 public:
+	//subakio
+	float raw_control[4];
+	float after_control[4];
+	float mix_ouputs[6];
+	//
+
+	void get_mixinfo(float* raws, float* afters, float* outputs);
+
 	/** next mixer in a list */
 	Mixer				*_next;
 

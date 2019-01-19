@@ -159,6 +159,10 @@ MultirotorMixer::mix(float *outputs, unsigned space)
 	3) mix in yaw and scale if it leads to limit violation.
 	4) scale all outputs to range [idle_speed,1]
 	*/
+	for (int i=0; i<4; i++) 
+	{
+		raw_control[i] = get_control(0, i);
+	}
 
 	float		roll    = math::constrain(get_control(0, 0) * _roll_scale, -1.0f, 1.0f);
 	float		pitch   = math::constrain(get_control(0, 1) * _pitch_scale, -1.0f, 1.0f);
@@ -166,6 +170,11 @@ MultirotorMixer::mix(float *outputs, unsigned space)
 	float		thrust  = math::constrain(get_control(0, 3), 0.0f, 1.0f);
 	float		min_out = 1.0f;
 	float		max_out = 0.0f;
+
+	after_control[0] = roll;
+	after_control[1] = pitch;
+	after_control[2] = yaw;
+	after_control[3] = thrust;
 
 	// clean out class variable used to capture saturation
 	_saturation_status.value = 0;
@@ -294,6 +303,11 @@ MultirotorMixer::mix(float *outputs, unsigned space)
 
 		outputs[i] = math::constrain(_idle_speed + (outputs[i] * (1.0f - _idle_speed)), _idle_speed, 1.0f);
 
+	}
+
+	for (int i=0; i<6; i++)
+	{
+		mix_ouputs[i] = outputs[i];
 	}
 
 	/* slew rate limiting and saturation checking */

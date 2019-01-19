@@ -178,6 +178,12 @@ Mixer::string_well_formed(const char *buf, unsigned &buflen)
 	return false;
 }
 
+void Mixer::get_mixinfo(float* raws, float* afters, float* outputs)
+{
+	memcpy(raws, raw_control, sizeof(float)*4);
+	memcpy(afters, after_control, sizeof(float)*4);
+	memcpy(outputs, mix_ouputs, sizeof(float) * 6);
+}
 /****************************************************************************/
 
 NullMixer::NullMixer() :
