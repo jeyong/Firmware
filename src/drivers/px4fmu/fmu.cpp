@@ -70,6 +70,7 @@
 #include <uORB/topics/safety.h>
 #include <uORB/topics/vehicle_command.h>
 #include <uORB/topics/vehicle_status.h>
+#include <uORB/topics/hangkong.h>
 
 #ifdef HRT_PPM_CHANNEL
 # include <systemlib/ppm_decode.h>
@@ -240,6 +241,7 @@ private:
 	bool		_analog_rc_rssi_stable;
 	orb_advert_t	_to_input_rc;
 	orb_advert_t	_outputs_pub;
+	orb_advert_t	_hangkong_pub;
 	unsigned	_num_outputs;
 	int		_class_instance;
 	int		_rcs_fd;
@@ -373,6 +375,7 @@ PX4FMU::PX4FMU(bool run_as_task) :
 	_analog_rc_rssi_stable(false),
 	_to_input_rc(nullptr),
 	_outputs_pub(nullptr),
+	_hangkong_pub(nullptr),
 	_num_outputs(0),
 	_class_instance(0),
 	_rcs_fd(-1),
@@ -462,6 +465,7 @@ PX4FMU::~PX4FMU()
 
 	orb_unadvertise(_to_input_rc);
 	orb_unadvertise(_outputs_pub);
+	orb_unadvertise(_hangkong_pub);
 	orb_unadvertise(_to_safety);
 	orb_unadvertise(_to_mixer_status);
 
@@ -1315,7 +1319,7 @@ PX4FMU::cycle()
 				/* do mixing */
 				float outputs[_max_actuators];
 				const unsigned mixed_num_outputs = _mixers->mix(outputs, _num_outputs);
-
+				
 				/* the PWM limit call takes care of out of band errors, NaN and constrains */
 				uint16_t pwm_limited[MAX_ACTUATORS];
 
@@ -1363,6 +1367,15 @@ PX4FMU::cycle()
 				}
 
 				orb_publish_auto(ORB_ID(actuator_outputs), &_outputs_pub, &actuator_outputs, &_class_instance, ORB_PRIO_DEFAULT);
+
+				hangkong_s hangkong_outputs = {};
+				_mixers->get_mixerinfo(hangkong_outputs.raw_controls, hangkong_outputs.after_controls, hangkong_outputs.mixer_controls);
+
+				if (_hangkong_pub == nullptr) {
+					_hangkong_pub = orb_advertise(ORB_ID(hangkong), &hangkong_outputs);
+				} else {
+					orb_publish(ORB_ID(hangkong), _hangkong_pub, &hangkong_outputs);
+				}
 
 				/* publish mixer status */
 				MultirotorMixer::saturation_status saturation_status;

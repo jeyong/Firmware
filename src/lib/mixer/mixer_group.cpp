@@ -116,6 +116,12 @@ MixerGroup::mix(float *outputs, unsigned space)
 	return index;
 }
 
+void MixerGroup::get_mixerinfo(float* raws, float* afters, float* outputs)
+{
+	_first->get_mixinfo(raws, afters, outputs);
+}
+
+
 /*
  * set_trims() has no effect except for the SimpleMixer implementation for which set_trim()
  * always returns the value one.

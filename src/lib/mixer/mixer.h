@@ -312,6 +312,8 @@ public:
 	MixerGroup(ControlCallback control_cb, uintptr_t cb_handle);
 	~MixerGroup();
 
+	void get_mixerinfo(float* raws, float* afters, float* outputs);
+
 	virtual unsigned		mix(float *outputs, unsigned space);
 	virtual uint16_t		get_saturation_status(void);
 	virtual void			groups_required(uint32_t &groups);
