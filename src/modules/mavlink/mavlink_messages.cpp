@@ -101,6 +101,7 @@
 #include <uORB/topics/sensor_gyro.h>
 #include <uORB/topics/vehicle_air_data.h>
 #include <uORB/topics/vehicle_magnetometer.h>
+#include <uORB/topics/hangkong.h>
 #include <uORB/uORB.h>
 
 using matrix::wrap_2pi;
@@ -286,6 +287,76 @@ void get_mavlink_mode_state(const struct vehicle_status_s *const status, uint8_t
 	}
 }
 
+class MavlinkStreamTrajectory : public MavlinkStream
+{
+public:
+	const char *get_name() const
+	{
+		return MavlinkStreamTrajectory::get_name_static();
+	}
+
+	static const char *get_name_static()
+	{
+		return "TRAJECTORY";
+	}
+
+	static uint16_t get_id_static()
+	{
+		return MAVLINK_MSG_ID_TRAJECTORY;
+	}
+
+	uint16_t get_id()
+	{
+		return get_id_static();
+	}
+
+	static MavlinkStream *new_instance(Mavlink *mavlink)
+	{
+		return new MavlinkStreamTrajectory(mavlink);
+	}
+
+	unsigned get_size()
+	{
+		return MAVLINK_MSG_ID_TRAJECTORY_LEN + MAVLINK_NUM_NON_PAYLOAD_BYTES;
+	}
+
+	bool const_rate()
+	{
+		return true;
+	}
+
+private:
+	MavlinkOrbSubscription *_hangkong_sub;
+
+	/* do not allow top copying this class */
+	MavlinkStreamTrajectory(MavlinkStreamTrajectory &) = delete;
+	MavlinkStreamTrajectory &operator = (const MavlinkStreamTrajectory &) = delete;
+
+protected:
+	explicit MavlinkStreamTrajectory(Mavlink *mavlink) : MavlinkStream(mavlink),
+		_hangkong_sub(_mavlink->add_orb_subscription(ORB_ID(hangkong)))
+	{}
+
+	bool send(const hrt_abstime t)
+	{
+		struct hangkong_s status = {};
+
+		/* always send the heartbeat, independent of the update status of the topics */
+		if (!_hangkong_sub->update(&status)) {
+			/* if topic update failed fill it with defaults */
+			memset(&status, 0, sizeof(status));
+		}
+
+		mavlink_trajectory_t msg = {};
+		memcpy(&msg.point_1[0], &status.raw_controls[0], sizeof(status.raw_controls));
+		memcpy(&msg.point_2[0], &status.after_controls[0], sizeof(status.after_controls));
+		memcpy(&msg.point_3[0], &status.mixer_controls[0], sizeof(status.mixer_controls));
+
+		mavlink_msg_trajectory_send_struct(_mavlink->get_channel(), &msg);
+
+		return true;
+	}
+};
 
 class MavlinkStreamHeartbeat : public MavlinkStream
 {

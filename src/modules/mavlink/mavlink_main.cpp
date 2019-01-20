@@ -2028,9 +2028,10 @@ Mavlink::task_main(int argc, char *argv[])
 		configure_stream("RC_CHANNELS", 5.0f);
 		configure_stream("SERVO_OUTPUT_RAW_0", 1.0f);
 		configure_stream("SYS_STATUS", 1.0f);
-		configure_stream("VFR_HUD", 4.0f);
+		//configure_stream("VFR_HUD", 4.0f);
 		configure_stream("VISION_POSITION_ESTIMATE", 1.0f);
-		configure_stream("WIND_COV", 1.0f);
+		//configure_stream("WIND_COV", 1.0f);
+		configure_stream("TRAJECTORY", 10.0f);
 		break;
 
 	case MAVLINK_MODE_ONBOARD:
