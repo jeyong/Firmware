@@ -341,18 +341,29 @@ protected:
 	{
 		struct hangkong_s status = {};
 
-		/* always send the heartbeat, independent of the update status of the topics */
-		if (!_hangkong_sub->update(&status)) {
-			/* if topic update failed fill it with defaults */
-			memset(&status, 0, sizeof(status));
+		
+		if(_hangkong_sub->update(&status))
+		{
+			mavlink_trajectory_t msg = {};
+//			PX4_INFO("status.raw_control : %f  %f  %f  %f", (double)status.raw_controls[0], (double)status.raw_controls[1], (double)status.raw_controls[2], (double)status.raw_controls[3]);
+
+			memcpy(&msg.point_1[0], &status.raw_controls[0], sizeof(status.raw_controls));
+			memcpy(&msg.point_2[0], &status.after_controls[0], sizeof(status.after_controls));
+			memcpy(&msg.point_3[0], &status.mixer_controls[0], sizeof(status.mixer_controls));
+
+/*
+			PX4_INFO("msg.point1 : %f  %f  %f  %f", (double)msg.point_1[0], (double)msg.point_1[1], (double)msg.point_1[2], (double)msg.point_1[3]);
+			PX4_INFO("msg.point2 : %f  %f  %f  %f", (double)msg.point_2[0], (double)msg.point_2[1], (double)msg.point_2[2], (double)msg.point_2[3]);
+			PX4_INFO("msg.point3 : %f  %f  %f  %f", (double)msg.point_3[0], (double)msg.point_3[1], (double)msg.point_3[2], (double)msg.point_3[3]);
+*/
+			mavlink_msg_trajectory_send_struct(_mavlink->get_channel(), &msg);
 		}
+		else {
+			mavlink_trajectory_t msg = {};
+			mavlink_msg_trajectory_send_struct(_mavlink->get_channel(), &msg);
+			PX4_INFO("msg.point empty!!!");
 
-		mavlink_trajectory_t msg = {};
-		memcpy(&msg.point_1[0], &status.raw_controls[0], sizeof(status.raw_controls));
-		memcpy(&msg.point_2[0], &status.after_controls[0], sizeof(status.after_controls));
-		memcpy(&msg.point_3[0], &status.mixer_controls[0], sizeof(status.mixer_controls));
-
-		mavlink_msg_trajectory_send_struct(_mavlink->get_channel(), &msg);
+		}
 
 		return true;
 	}

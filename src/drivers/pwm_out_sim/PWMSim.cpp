@@ -37,6 +37,13 @@ PWMSim::PWMSim() :
 	CDev("pwm_out_sim", PWM_OUTPUT0_DEVICE_PATH),
 	_perf_control_latency(perf_alloc(PC_ELAPSED, "pwm_out_sim control latency"))
 {
+
+	/*
+	hangkong_s hangkong_outputs = {};
+	if (_hangkong_pub == nullptr) {
+		_hangkong_pub = orb_advertise(ORB_ID(hangkong), &hangkong_outputs);
+	}
+	*/
 	for (unsigned i = 0; i < MAX_ACTUATORS; i++) {
 		_pwm_min[i] = PWM_SIM_PWM_MIN_MAGIC;
 		_pwm_max[i] = PWM_SIM_PWM_MAX_MAGIC;
@@ -163,7 +170,7 @@ PWMSim::run()
 
 	/* advertise the mixed control outputs, insist on the first group output */
 	_outputs_pub = orb_advertise(ORB_ID(actuator_outputs), &_actuator_outputs);
-    _hangkong_pub = orb_advertise(ORB_ID(actuator_outputs), &_actuator_outputs);
+    
 	update_params();
 	int params_sub = orb_subscribe(ORB_ID(parameter_update));
 
@@ -300,7 +307,7 @@ PWMSim::run()
 			} else {
 				orb_publish(ORB_ID(hangkong), _hangkong_pub, &hangkong_outputs);
 			}
-			print_mixerinfo(&hangkong_outputs);
+			//print_mixerinfo(&hangkong_outputs);
 
 
 			// use first valid timestamp_sample for latency tracking
