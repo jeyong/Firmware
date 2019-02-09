@@ -132,7 +132,7 @@ $ pwm test -c 13 -p 1200
 	PRINT_MODULE_USAGE_COMMAND_DESCR("test", "Set Output to a specific value until 'q' or 'c' or 'ctrl-c' pressed");
 
 	PRINT_MODULE_USAGE_COMMAND_DESCR("steps", "Run 5 steps from 0 to 100%");
-
+	PRINT_MODULE_USAGE_COMMAND_DESCR("subak", "Set PWM values of each motor");
 
 	PRINT_MODULE_USAGE_PARAM_COMMENT("The commands 'failsafe', 'disarmed', 'min', 'max' and 'test' require a PWM value:");
 	PRINT_MODULE_USAGE_PARAM_INT('p', 0, 0, 4000, "PWM value (eg. 1100)", false);
@@ -214,7 +214,14 @@ pwm_main(int argc, char *argv[])
 	unsigned long channels;
 	unsigned single_ch = 0;
 	int pwm_value = 0;
+// subakio
+	unsigned long pwms;
+	int pwm_group[4];
+	unsigned single_pwm = 0;
+	int pwm_index = 3;
 
+	memset(pwm_group, 0, sizeof(pwm_group));
+// subakio --
 	if (argc < 2) {
 		usage(nullptr);
 		return 1;
@@ -223,7 +230,7 @@ pwm_main(int argc, char *argv[])
 	int myoptind = 1;
 	const char *myoptarg = nullptr;
 
-	while ((ch = px4_getopt(argc, argv, "d:vec:g:m:ap:r:", &myoptind, &myoptarg)) != EOF) {
+	while ((ch = px4_getopt(argc, argv, "d:vec:g:m:z:ap:r:", &myoptind, &myoptarg)) != EOF) {
 		switch (ch) {
 
 		case 'd':
@@ -292,6 +299,22 @@ pwm_main(int argc, char *argv[])
 
 		case 'r':
 			alt_rate = get_parameter_value(myoptarg, "PWM Rate");
+			break;
+
+		case 'z':
+			/* Read in channels supplied as one int and convert to mask: 1234 -> 0xF */	
+			PX4_ERR("myoptarg : %s", myoptarg);
+			pwms = strtoul(myoptarg, &ep, 0);
+			pwm_index = 3;
+			PX4_ERR("pwms : %d", pwms);
+
+			while ((single_pwm = pwms % 100)) {
+				PX4_ERR("while : single_pwm : %d, pwms : %d", single_pwm, pwms);
+				pwm_group[pwm_index] = single_pwm * 100;
+				pwms /= 100;
+				pwm_index--;
+			}
+			PX4_ERR("pwm0 : %d, pwm1: %d, pwm2 : %d, pwm3 : %d", pwm_group[0],pwm_group[1],pwm_group[2],pwm_group[3]);
 			break;
 
 		default:
@@ -642,7 +665,86 @@ pwm_main(int argc, char *argv[])
 
 		return 0;
 
-	} else if (!strcmp(command, "test")) {
+	} else if (!strcmp(command, "subak")) {
+		/* get current servo values */
+		PX4_ERR("subak command start!!");
+		struct pwm_output_values last_spos;
+
+		for (unsigned i = 0; i < servo_count; i++) {
+			ret = px4_ioctl(fd, PWM_SERVO_GET(i), (unsigned long)&last_spos.values[i]);
+
+			if (ret != OK) {
+				PX4_ERR("PWM_SERVO_GET(%d)", i);
+				return 1;
+			}
+		}
+
+		/* perform PWM output */
+
+		/* Open console directly to grab CTRL-C signal */
+		struct pollfd fds;
+		fds.fd = 0; /* stdin */
+		fds.events = POLLIN;
+
+		PX4_INFO("Press CTRL-C or 'c' to abort.");
+
+		while (1) {
+			for (unsigned i = 0; i < servo_count; i++) {
+					if (i<4) 
+					{
+						ret = px4_ioctl(fd, PWM_SERVO_SET(i), pwm_group[i]);
+
+						if (ret != OK) {
+							PX4_ERR("PWM_SERVO_SET(%d)", i);
+							return 1;
+						}
+					}
+			}
+
+			/* abort on user request */
+			char c;
+			ret = poll(&fds, 1, 0);
+
+			if (ret > 0) {
+
+				ret = read(0, &c, 1);
+
+				if (c == 0x03 || c == 0x63 || c == 'q') {
+					/* reset output to the last value */
+					for (unsigned i = 0; i < servo_count; i++) {
+						if (i<4) 
+						{		//if (set_mask & 1 << i) {
+							ret = px4_ioctl(fd, PWM_SERVO_SET(i), last_spos.values[i]);
+
+							if (ret != OK) {
+								PX4_ERR("PWM_SERVO_SET(%d)", i);
+								return 1;
+							}
+						} //}
+					}
+
+					PX4_INFO("User abort\n");
+					return 0;
+				}
+			}
+
+			/* Delay longer than the max Oneshot duration */
+
+			usleep(2542);
+
+#ifdef __PX4_NUTTX
+			/* Trigger all timer's channels in Oneshot mode to fire
+			 * the oneshots with updated values.
+			 */
+
+			up_pwm_update();
+#endif
+		}
+
+		return 0;
+
+
+	}else if (!strcmp(command, "test")) {
 
 		if (set_mask == 0) {
 			usage("no channels set");
