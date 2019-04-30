@@ -65,6 +65,8 @@
 #include <parameters/param.h>
 #include "drivers/drv_pwm_output.h"
 
+//subakio
+void splits(const char* str, int* pwm_g);
 static void	usage(const char *reason);
 __BEGIN_DECLS
 __EXPORT int	pwm_main(int argc, char *argv[]);
@@ -195,6 +197,19 @@ get_parameter_value(const char *option, const char *paramDescription)
 
 	return result_value;
 }
+//subakio
+void splits(const char* str, int* pwm_g)
+{
+    char out[5];
+    memset(out, 0, sizeof(out));
+
+    for(int i =0; i<4; i++){
+        int index = i * 4;
+        memcpy(out, &str[index], 4);
+		pwm_g[i] = atoi(out);
+//        printf("%d : %d\n", i, atoi(out));
+    }
+}
 
 int
 pwm_main(int argc, char *argv[])
@@ -215,10 +230,10 @@ pwm_main(int argc, char *argv[])
 	unsigned single_ch = 0;
 	int pwm_value = 0;
 // subakio
-	unsigned long pwms;
+	//unsigned long pwms;
 	int pwm_group[4];
-	unsigned single_pwm = 0;
-	int pwm_index = 3;
+	//unsigned single_pwm = 0;
+	//int pwm_index = 3;
 
 	memset(pwm_group, 0, sizeof(pwm_group));
 // subakio --
@@ -304,8 +319,9 @@ pwm_main(int argc, char *argv[])
 		case 'z':
 			/* Read in channels supplied as one int and convert to mask: 1234 -> 0xF */	
 			PX4_ERR("myoptarg : %s", myoptarg);
-			pwms = strtoul(myoptarg, &ep, 0);
-			pwm_index = 3;
+			//pwms = strtoul(myoptarg, &ep, 0);
+			//pwm_index = 3;
+			/*
 			PX4_ERR("pwms : %d", pwms);
 
 			while ((single_pwm = pwms % 100)) {
@@ -314,6 +330,8 @@ pwm_main(int argc, char *argv[])
 				pwms /= 100;
 				pwm_index--;
 			}
+			*/
+			splits(myoptarg, pwm_group);
 			PX4_ERR("pwm0 : %d, pwm1: %d, pwm2 : %d, pwm3 : %d", pwm_group[0],pwm_group[1],pwm_group[2],pwm_group[3]);
 			break;
 
