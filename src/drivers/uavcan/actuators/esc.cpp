@@ -166,6 +166,13 @@ UavcanEscController::orb_pub_timer_cb(const uavcan::TimerEvent &)
 	_esc_status.esc_armed_flags = (1 << _rotor_count) - 1;
 
 	_esc_status_pub.publish(_esc_status);
+
+	_uavcan_esc_status.motors_on[0] = _esc_status.esc_online_flags & 1;
+	_uavcan_esc_status.motors_on[1] = _esc_status.esc_online_flags & 2;
+	_uavcan_esc_status.motors_on[2] = _esc_status.esc_online_flags & 4;
+	_uavcan_esc_status.motors_on[3] = _esc_status.esc_online_flags & 8;
+
+	_uavcan_esc_status_pub.publish(_uavcan_esc_status);
 }
 
 uint8_t

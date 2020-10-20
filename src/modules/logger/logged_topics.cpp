@@ -57,6 +57,7 @@ void LoggedTopics::add_default_topics()
 	add_topic("cpuload");
 	add_topic("ekf_gps_drift");
 	add_topic("esc_status", 250);
+	add_topic("uavcan_esc_status", 250);
 	add_topic("estimator_innovation_test_ratios", 200);
 	add_topic("estimator_innovation_variances", 200);
 	add_topic("estimator_innovations", 200);

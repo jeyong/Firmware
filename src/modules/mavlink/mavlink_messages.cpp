@@ -118,6 +118,9 @@
 #include <uORB/topics/vehicle_trajectory_waypoint.h>
 #include <uORB/topics/vtol_vehicle_status.h>
 #include <uORB/topics/wind_estimate.h>
+#include <uORB/topics/uavcan_esc_status.h>
+#include <uORB/topics/uavcan_gnss_status.h>
+#include <uORB/topics/uavcan_battery_status.h>
 
 using matrix::Vector3f;
 using matrix::wrap_2pi;
@@ -5243,6 +5246,193 @@ protected:
 	}
 };
 
+class MavlinkStreamUavcanEscStatus : public MavlinkStream
+{
+public:
+	const char *get_name() const override
+	{
+		return MavlinkStreamUavcanEscStatus::get_name_static();
+	}
+
+	static constexpr const char *get_name_static()
+	{
+		return "UAVCANESCSTATUS";
+	}
+
+	static constexpr uint16_t get_id_static()
+	{
+		return MAVLINK_MSG_ID_UAVCAN_SUBAK_ESC_STATUS;
+	}
+
+	uint16_t get_id() override
+	{
+		return get_id_static();
+	}
+
+	static MavlinkStream *new_instance(Mavlink *mavlink)
+	{
+		return new  MavlinkStreamUavcanEscStatus(mavlink);
+	}
+
+	unsigned get_size() override
+	{
+		return MAVLINK_MSG_ID_UAVCAN_SUBAK_ESC_STATUS_LEN + MAVLINK_NUM_NON_PAYLOAD_BYTES;
+	}
+
+	bool const_rate() override
+	{
+		return true;
+	}
+
+private:
+	uORB::Subscription _status_sub{ORB_ID(uavcan_esc_status)};
+
+	/* do not allow top copying this class */
+	MavlinkStreamUavcanEscStatus(MavlinkStreamUavcanEscStatus &) = delete;
+	MavlinkStreamUavcanEscStatus &operator = (const MavlinkStreamUavcanEscStatus &) = delete;
+
+protected:
+	explicit MavlinkStreamUavcanEscStatus(Mavlink *mavlink) : MavlinkStream(mavlink)
+	{}
+
+	bool send(const hrt_abstime t) override
+	{
+		uavcan_esc_status_s status{};
+		if (_status_sub.update(&status)){
+			mavlink_msg_uavcan_subak_esc_status_send(_mavlink->get_channel(),  status.motors_on);
+			PX4_ERR("uavcan_esc_update : %d, %d, %d, %d\n", (uint32_t)status.motors_on[0], (uint32_t)status.motors_on[1], (uint32_t)status.motors_on[2], (uint32_t)status.motors_on[3]);
+			return true;
+		} else {
+			mavlink_msg_uavcan_subak_esc_status_send(_mavlink->get_channel(),  status.motors_on);
+			PX4_ERR("uavcan_esc_not_update : %d, %d, %d, %d\n", (uint32_t)status.motors_on[0], (uint32_t)status.motors_on[1], (uint32_t)status.motors_on[2], (uint32_t)status.motors_on[3]);
+		}
+		return false;
+	}
+};
+
+class MavlinkStreamUavcanGnssStatus : public MavlinkStream
+{
+public:
+	const char *get_name() const override
+	{
+		return MavlinkStreamUavcanGnssStatus::get_name_static();
+	}
+
+	static constexpr const char *get_name_static()
+	{
+		return "UAVCANGNSSSTATUS";
+	}
+
+	static constexpr uint16_t get_id_static()
+	{
+		return MAVLINK_MSG_ID_UAVCAN_SUBAK_GNSS_STATUS;
+	}
+
+	uint16_t get_id() override
+	{
+		return get_id_static();
+	}
+
+	static MavlinkStream *new_instance(Mavlink *mavlink)
+	{
+		return new MavlinkStreamUavcanGnssStatus(mavlink);
+	}
+
+	unsigned get_size() override
+	{
+		return MAVLINK_MSG_ID_UAVCAN_SUBAK_GNSS_STATUS_LEN + MAVLINK_NUM_NON_PAYLOAD_BYTES;
+	}
+
+	bool const_rate() override
+	{
+		return true;
+	}
+
+private:
+	uORB::Subscription _status_sub{ORB_ID(uavcan_gnss_status)};
+
+	/* do not allow top copying this class */
+	MavlinkStreamUavcanGnssStatus(MavlinkStreamUavcanGnssStatus &) = delete;
+	MavlinkStreamUavcanGnssStatus &operator = (const MavlinkStreamUavcanGnssStatus &) = delete;
+
+protected:
+	explicit MavlinkStreamUavcanGnssStatus(Mavlink *mavlink) : MavlinkStream(mavlink)
+	{}
+
+	bool send(const hrt_abstime t) override
+	{
+		// always send the heartbeat, independent of the update status of the topics
+		uavcan_gnss_status_s status{};
+		_status_sub.copy(&status);
+
+		mavlink_msg_uavcan_subak_gnss_status_send(_mavlink->get_channel(),  status.lat_lon);
+
+		return true;
+	}
+};
+
+class MavlinkStreamUavcanBatteryStatus : public MavlinkStream
+{
+public:
+	const char *get_name() const override
+	{
+		return MavlinkStreamUavcanBatteryStatus::get_name_static();
+	}
+
+	static constexpr const char *get_name_static()
+	{
+		return "UAVCANBATTERYSTATUS";
+	}
+
+	static constexpr uint16_t get_id_static()
+	{
+		return MAVLINK_MSG_ID_UAVCAN_SUBAK_BATTERY_STATUS;
+	}
+
+	uint16_t get_id() override
+	{
+		return get_id_static();
+	}
+
+	static MavlinkStream *new_instance(Mavlink *mavlink)
+	{
+		return new MavlinkStreamUavcanBatteryStatus(mavlink);
+	}
+
+	unsigned get_size() override
+	{
+		return MAVLINK_MSG_ID_UAVCAN_SUBAK_BATTERY_STATUS_LEN + MAVLINK_NUM_NON_PAYLOAD_BYTES;
+	}
+
+	bool const_rate() override
+	{
+		return true;
+	}
+
+private:
+	uORB::Subscription _status_sub{ORB_ID(uavcan_battery_status)};
+
+	/* do not allow top copying this class */
+	MavlinkStreamUavcanBatteryStatus(MavlinkStreamUavcanBatteryStatus &) = delete;
+	MavlinkStreamUavcanBatteryStatus &operator = (const MavlinkStreamUavcanBatteryStatus &) = delete;
+
+protected:
+	explicit MavlinkStreamUavcanBatteryStatus(Mavlink *mavlink) : MavlinkStream(mavlink)
+	{}
+
+	bool send(const hrt_abstime t) override
+	{
+		// always send the heartbeat, independent of the update status of the topics
+		uavcan_battery_status_s status{};
+		_status_sub.copy(&status);
+
+		mavlink_msg_uavcan_subak_battery_status_send(_mavlink->get_channel(),  status.vol);
+
+		return true;
+	}
+};
+
+
 static const StreamListItem streams_list[] = {
 	create_stream_list_item<MavlinkStreamHeartbeat>(),
 	create_stream_list_item<MavlinkStreamStatustext>(),
@@ -5307,7 +5497,10 @@ static const StreamListItem streams_list[] = {
 	create_stream_list_item<MavlinkStreamProtocolVersion>(),
 	create_stream_list_item<MavlinkStreamFlightInformation>(),
 	create_stream_list_item<MavlinkStreamStorageInformation>(),
-	create_stream_list_item<MavlinkStreamRawRpm>()
+	create_stream_list_item<MavlinkStreamRawRpm>(),
+	create_stream_list_item<MavlinkStreamUavcanEscStatus>(),
+	create_stream_list_item<MavlinkStreamUavcanGnssStatus>(),
+	create_stream_list_item<MavlinkStreamUavcanBatteryStatus>()
 };
 
 const char *get_stream_name(const uint16_t msg_id)

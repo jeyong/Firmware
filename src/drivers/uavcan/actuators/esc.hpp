@@ -51,6 +51,8 @@
 #include <uORB/PublicationMulti.hpp>
 #include <uORB/topics/actuator_outputs.h>
 #include <uORB/topics/esc_status.h>
+#include <uORB/topics/uavcan_esc_status.h>
+
 #include <drivers/drv_hrt.h>
 #include <lib/mixer_module/mixer_module.hpp>
 
@@ -103,6 +105,9 @@ private:
 	esc_status_s	_esc_status{};
 
 	uORB::PublicationMulti<esc_status_s> _esc_status_pub{ORB_ID(esc_status)};
+
+	uavcan_esc_status_s _uavcan_esc_status{};
+	uORB::Publication<uavcan_esc_status_s> _uavcan_esc_status_pub{ORB_ID(uavcan_esc_status)};
 
 	uint8_t		_rotor_count{0};
 
