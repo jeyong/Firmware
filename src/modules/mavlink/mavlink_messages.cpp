@@ -579,7 +579,6 @@ protected:
 	bool send(const hrt_abstime t) override
 	{
 		bool updated_battery = false;
-
 		for (int i = 0; i < ORB_MULTI_MAX_INSTANCES; i++) {
 			if (_battery_status_sub[i].updated()) {
 				updated_battery = true;
@@ -5256,7 +5255,7 @@ public:
 
 	static constexpr const char *get_name_static()
 	{
-		return "UAVCANESCSTATUS";
+		return "UAVCAN_SUBAK_ESC_STATUS";
 	}
 
 	static constexpr uint16_t get_id_static()
@@ -5297,16 +5296,19 @@ protected:
 
 	bool send(const hrt_abstime t) override
 	{
-		uavcan_esc_status_s status{};
+		static uint32_t counter = 0;
+		counter++;
+		PX4_ERR("xxx uavcan esc xxxxx %d", counter);
+
+		uavcan_esc_status_s status{0};
 		if (_status_sub.update(&status)){
 			mavlink_msg_uavcan_subak_esc_status_send(_mavlink->get_channel(),  status.motors_on);
-			PX4_ERR("uavcan_esc_update : %d, %d, %d, %d\n", (uint32_t)status.motors_on[0], (uint32_t)status.motors_on[1], (uint32_t)status.motors_on[2], (uint32_t)status.motors_on[3]);
-			return true;
+			PX4_ERR("uavcan_esc_update %d: %d, %d, %d, %d", counter, (uint32_t)status.motors_on[0], (uint32_t)status.motors_on[1], (uint32_t)status.motors_on[2], (uint32_t)status.motors_on[3]);
 		} else {
 			mavlink_msg_uavcan_subak_esc_status_send(_mavlink->get_channel(),  status.motors_on);
-			PX4_ERR("uavcan_esc_not_update : %d, %d, %d, %d\n", (uint32_t)status.motors_on[0], (uint32_t)status.motors_on[1], (uint32_t)status.motors_on[2], (uint32_t)status.motors_on[3]);
+			PX4_ERR("uavcan_esc_not_update %d: %d, %d, %d, %d", counter, (uint32_t)status.motors_on[0], (uint32_t)status.motors_on[1], (uint32_t)status.motors_on[2], (uint32_t)status.motors_on[3]);
 		}
-		return false;
+		return true;
 	}
 };
 
@@ -5361,12 +5363,19 @@ protected:
 
 	bool send(const hrt_abstime t) override
 	{
-		// always send the heartbeat, independent of the update status of the topics
-		uavcan_gnss_status_s status{};
-		_status_sub.copy(&status);
+		static uint32_t counter_gns= 0;
+		counter_gns++;
+		PX4_ERR("--- uavan gnss -----  %d", counter_gns);
 
-		mavlink_msg_uavcan_subak_gnss_status_send(_mavlink->get_channel(),  status.lat_lon);
+		uavcan_gnss_status_s status{0};
 
+		if (_status_sub.update(&status)){
+			mavlink_msg_uavcan_subak_gnss_status_send(_mavlink->get_channel(),  status.lat_lon);
+			PX4_ERR("uavcan_gnss_update %d: %f, %f ", counter_gns, (double)status.lat_lon[0], (double)status.lat_lon[1]);
+		} else {
+			mavlink_msg_uavcan_subak_gnss_status_send(_mavlink->get_channel(),  status.lat_lon);
+			PX4_ERR("uavcan_gnss_not_update %d: %f, %f", counter_gns, (double)status.lat_lon[0], (double)status.lat_lon[1]);
+		}
 		return true;
 	}
 };
@@ -5422,12 +5431,17 @@ protected:
 
 	bool send(const hrt_abstime t) override
 	{
-		// always send the heartbeat, independent of the update status of the topics
-		uavcan_battery_status_s status{};
-		_status_sub.copy(&status);
-
-		mavlink_msg_uavcan_subak_battery_status_send(_mavlink->get_channel(),  status.vol);
-
+		static uint32_t counter_ba = 0;
+		counter_ba++;
+		PX4_ERR("----- battery counter %d ---------", counter_ba);
+		uavcan_battery_status_s status{0};
+		if (_status_sub.update(&status)){
+			mavlink_msg_uavcan_subak_battery_status_send(_mavlink->get_channel(),  status.vol);
+			PX4_ERR("uavcan_battery_update %d: %f", counter_ba, (double)status.vol);
+		} else {
+			mavlink_msg_uavcan_subak_battery_status_send(_mavlink->get_channel(),  status.vol);
+			PX4_ERR("uavcan_battery_not_update %d: %f", counter_ba, (double)status.vol);
+		}
 		return true;
 	}
 };

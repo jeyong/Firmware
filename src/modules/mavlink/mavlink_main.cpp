@@ -1581,8 +1581,6 @@ Mavlink::configure_streams_to_default(const char *configure_single_stream)
 
 	switch (_mode) {
 	case MAVLINK_MODE_NORMAL:
-		configure_stream_local("UAVCANESCSTATUS", 1.0f);
-
 		configure_stream_local("ADSB_VEHICLE", unlimited_rate);
 		configure_stream_local("ALTITUDE", 1.0f);
 		configure_stream_local("ATTITUDE", 15.0f);
@@ -1616,6 +1614,9 @@ Mavlink::configure_streams_to_default(const char *configure_single_stream)
 		configure_stream_local("VFR_HUD", 4.0f);
 		configure_stream_local("VIBRATION", 0.1f);
 		configure_stream_local("WIND_COV", 0.5f);
+		configure_stream_local("UAVCAN_SUBAK_ESC_STATUS", 0.5f);
+		configure_stream_local("UAVCANGNSSSTATUS",0.5f);
+		configure_stream_local("UAVCANBATTERYSTATUS", 0.5f);
 		break;
 
 	case MAVLINK_MODE_ONBOARD:
