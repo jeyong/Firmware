@@ -363,6 +363,14 @@ protected:
 		mavlink_msg_heartbeat_send(_mavlink->get_channel(), _mavlink->get_system_type(), MAV_AUTOPILOT_PX4,
 					   base_mode, custom_mode, system_status);
 
+		// uint8_t motors_on[4];
+		// motors_on[0] = 0;
+		// motors_on[1] = 0;
+		// motors_on[2] = 0;
+		// motors_on[3] = 0;
+		// mavlink_msg_uavcan_subak_esc_status_send(_mavlink->get_channel(), motors_on);
+		// float vol = 11.4;
+		// mavlink_msg_uavcan_subak_battery_status_send(_mavlink->get_channel(), vol);
 		return true;
 	}
 };
@@ -5245,72 +5253,78 @@ protected:
 	}
 };
 
-class MavlinkStreamUavcanEscStatus : public MavlinkStream
-{
-public:
-	const char *get_name() const override
-	{
-		return MavlinkStreamUavcanEscStatus::get_name_static();
-	}
+// class MavlinkStreamUavcanEscStatus : public MavlinkStream
+// {
+// public:
+// 	const char *get_name() const override
+// 	{
+// 		return MavlinkStreamUavcanEscStatus::get_name_static();
+// 	}
 
-	static constexpr const char *get_name_static()
-	{
-		return "UAVCAN_SUBAK_ESC_STATUS";
-	}
+// 	static constexpr const char *get_name_static()
+// 	{
+// 		return "UAVCAN_SUBAK_ESC_STATUS";
+// 	}
 
-	static constexpr uint16_t get_id_static()
-	{
-		return MAVLINK_MSG_ID_UAVCAN_SUBAK_ESC_STATUS;
-	}
+// 	static constexpr uint16_t get_id_static()
+// 	{
+// 		return MAVLINK_MSG_ID_UAVCAN_SUBAK_ESC_STATUS;
+// 	}
 
-	uint16_t get_id() override
-	{
-		return get_id_static();
-	}
+// 	uint16_t get_id() override
+// 	{
+// 		return get_id_static();
+// 	}
 
-	static MavlinkStream *new_instance(Mavlink *mavlink)
-	{
-		return new  MavlinkStreamUavcanEscStatus(mavlink);
-	}
+// 	static MavlinkStream *new_instance(Mavlink *mavlink)
+// 	{
+// 		return new  MavlinkStreamUavcanEscStatus(mavlink);
+// 	}
 
-	unsigned get_size() override
-	{
-		return MAVLINK_MSG_ID_UAVCAN_SUBAK_ESC_STATUS_LEN + MAVLINK_NUM_NON_PAYLOAD_BYTES;
-	}
+// 	unsigned get_size() override
+// 	{
+// 		return MAVLINK_MSG_ID_UAVCAN_SUBAK_ESC_STATUS_LEN + MAVLINK_NUM_NON_PAYLOAD_BYTES;
+// 	}
 
-	bool const_rate() override
-	{
-		return true;
-	}
+// 	bool const_rate() override
+// 	{
+// 		return true;
+// 	}
 
-private:
-	uORB::Subscription _status_sub{ORB_ID(uavcan_esc_status)};
+// private:
+// 	uORB::Subscription _status_sub{ORB_ID(uavcan_esc_status)};
 
-	/* do not allow top copying this class */
-	MavlinkStreamUavcanEscStatus(MavlinkStreamUavcanEscStatus &) = delete;
-	MavlinkStreamUavcanEscStatus &operator = (const MavlinkStreamUavcanEscStatus &) = delete;
+// 	/* do not allow top copying this class */
+// 	MavlinkStreamUavcanEscStatus(MavlinkStreamUavcanEscStatus &) = delete;
+// 	MavlinkStreamUavcanEscStatus &operator = (const MavlinkStreamUavcanEscStatus &) = delete;
 
-protected:
-	explicit MavlinkStreamUavcanEscStatus(Mavlink *mavlink) : MavlinkStream(mavlink)
-	{}
+// protected:
+// 	explicit MavlinkStreamUavcanEscStatus(Mavlink *mavlink) : MavlinkStream(mavlink)
+// 	{}
 
-	bool send(const hrt_abstime t) override
-	{
-		static uint32_t counter = 0;
-		counter++;
-		PX4_ERR("xxx uavcan esc xxxxx %d", counter);
+// 	bool send(const hrt_abstime t) override
+// 	{
+// 		static uint32_t counter = 0;
+// 		counter++;
+// 		PX4_ERR("xxx uavcan esc xxxxx %d", counter);
 
-		uavcan_esc_status_s status{0};
-		if (_status_sub.update(&status)){
-			mavlink_msg_uavcan_subak_esc_status_send(_mavlink->get_channel(),  status.motors_on);
-			PX4_ERR("uavcan_esc_update %d: %d, %d, %d, %d", counter, (uint32_t)status.motors_on[0], (uint32_t)status.motors_on[1], (uint32_t)status.motors_on[2], (uint32_t)status.motors_on[3]);
-		} else {
-			mavlink_msg_uavcan_subak_esc_status_send(_mavlink->get_channel(),  status.motors_on);
-			PX4_ERR("uavcan_esc_not_update %d: %d, %d, %d, %d", counter, (uint32_t)status.motors_on[0], (uint32_t)status.motors_on[1], (uint32_t)status.motors_on[2], (uint32_t)status.motors_on[3]);
-		}
-		return true;
-	}
-};
+// 		uavcan_esc_status_s status{0};
+// 		mavlink_uavcan_subak_esc_status_t msg{0};
+// 		if (_status_sub.update(&status)){
+// 			msg.motors_on[0] = status.motors_on[0];
+// 			msg.motors_on[1] = status.motors_on[1];
+// 			msg.motors_on[2] = status.motors_on[2];
+// 			msg.motors_on[3] = status.motors_on[3];
+
+// 			mavlink_msg_uavcan_subak_esc_status_send_struct(_mavlink->get_channel(), &msg);
+// 			PX4_ERR("uavcan_esc_update %d: %d, %d, %d, %d", counter, (uint32_t)status.motors_on[0], (uint32_t)status.motors_on[1], (uint32_t)status.motors_on[2], (uint32_t)status.motors_on[3]);
+// 		} else {
+// 			mavlink_msg_uavcan_subak_esc_status_send_struct(_mavlink->get_channel(), &msg);
+// 			PX4_ERR("uavcan_esc_not_update %d: %d, %d, %d, %d", counter, (uint32_t)status.motors_on[0], (uint32_t)status.motors_on[1], (uint32_t)status.motors_on[2], (uint32_t)status.motors_on[3]);
+// 		}
+// 		return true;
+// 	}
+// };
 
 class MavlinkStreamUavcanGnssStatus : public MavlinkStream
 {
@@ -5322,7 +5336,7 @@ public:
 
 	static constexpr const char *get_name_static()
 	{
-		return "UAVCANGNSSSTATUS";
+		return "UAVCAN_SUBAK_GNSS_STATUS";
 	}
 
 	static constexpr uint16_t get_id_static()
@@ -5368,12 +5382,17 @@ protected:
 		PX4_ERR("--- uavan gnss -----  %d", counter_gns);
 
 		uavcan_gnss_status_s status{0};
+		mavlink_uavcan_subak_gnss_status_t msg{};
+		msg.lat_lon[0] = 123456000000000;
+		msg.lat_lon[1] = 987654000000000;
 
 		if (_status_sub.update(&status)){
-			mavlink_msg_uavcan_subak_gnss_status_send(_mavlink->get_channel(),  status.lat_lon);
+			msg.lat_lon[0] = status.lat_lon[0];
+			msg.lat_lon[1] = status.lat_lon[1];
+			mavlink_msg_uavcan_subak_gnss_status_send_struct(_mavlink->get_channel(), &msg);
 			PX4_ERR("uavcan_gnss_update %d: %f, %f ", counter_gns, (double)status.lat_lon[0], (double)status.lat_lon[1]);
 		} else {
-			mavlink_msg_uavcan_subak_gnss_status_send(_mavlink->get_channel(),  status.lat_lon);
+			mavlink_msg_uavcan_subak_gnss_status_send_struct(_mavlink->get_channel(), &msg);
 			PX4_ERR("uavcan_gnss_not_update %d: %f, %f", counter_gns, (double)status.lat_lon[0], (double)status.lat_lon[1]);
 		}
 		return true;
@@ -5390,7 +5409,7 @@ public:
 
 	static constexpr const char *get_name_static()
 	{
-		return "UAVCANBATTERYSTATUS";
+		return "UAVCAN_SUBAK_BATTERY_STATUS";
 	}
 
 	static constexpr uint16_t get_id_static()
@@ -5435,17 +5454,142 @@ protected:
 		counter_ba++;
 		PX4_ERR("----- battery counter %d ---------", counter_ba);
 		uavcan_battery_status_s status{0};
+		mavlink_uavcan_subak_battery_status_t msg{};
+		msg.voltage = 14.2;
 		if (_status_sub.update(&status)){
-			mavlink_msg_uavcan_subak_battery_status_send(_mavlink->get_channel(),  status.vol);
+			msg.voltage = status.vol;
+			mavlink_msg_uavcan_subak_battery_status_send_struct(_mavlink->get_channel(), &msg);
 			PX4_ERR("uavcan_battery_update %d: %f", counter_ba, (double)status.vol);
 		} else {
-			mavlink_msg_uavcan_subak_battery_status_send(_mavlink->get_channel(),  status.vol);
+			mavlink_msg_uavcan_subak_battery_status_send_struct(_mavlink->get_channel(), &msg);
 			PX4_ERR("uavcan_battery_not_update %d: %f", counter_ba, (double)status.vol);
 		}
 		return true;
 	}
 };
+class MavlinkStreamUavcanSubakEscStatus : public MavlinkStream
+{
+public:
+	const char *get_name() const override
+	{
+		return MavlinkStreamUavcanSubakEscStatus::get_name_static();
+	}
 
+	static constexpr const char *get_name_static()
+	{
+		return "UAVCAN_SUBAK_ESC_STATUS";
+	}
+
+	static constexpr uint16_t get_id_static()
+	{
+		return MAVLINK_MSG_ID_UAVCAN_SUBAK_ESC_STATUS;
+	}
+
+	uint16_t get_id() override
+	{
+		return get_id_static();
+	}
+
+	static MavlinkStream *new_instance(Mavlink *mavlink)
+	{
+		return new MavlinkStreamUavcanSubakEscStatus(mavlink);
+	}
+
+	unsigned get_size() override
+	{
+		return MAVLINK_MSG_ID_UAVCAN_SUBAK_ESC_STATUS_LEN + MAVLINK_NUM_NON_PAYLOAD_BYTES;
+	}
+
+	bool const_rate() override
+	{
+		return true;
+	}
+
+private:
+	uORB::Subscription _status_sub{ORB_ID(uavcan_esc_status)};
+
+	/* do not allow top copying this class */
+	MavlinkStreamUavcanSubakEscStatus(MavlinkStreamUavcanSubakEscStatus &) = delete;
+	MavlinkStreamUavcanSubakEscStatus &operator = (const MavlinkStreamUavcanSubakEscStatus &) = delete;
+
+protected:
+	explicit MavlinkStreamUavcanSubakEscStatus(Mavlink *mavlink) : MavlinkStream(mavlink)
+	{}
+
+	bool send(const hrt_abstime t) override
+	{
+				static uint32_t counter = 0;
+		counter++;
+		PX4_ERR("xxx uavcan esc xxxxx %d", counter);
+
+		uavcan_esc_status_s status{0};
+		uint8_t motors_on[4] = {0};
+		if (_status_sub.update(&status)){
+			motors_on[0] = status.motors_on[0];
+			motors_on[1] = status.motors_on[1];
+			motors_on[2] = status.motors_on[2];
+			motors_on[3] = status.motors_on[3];
+
+			mavlink_msg_uavcan_subak_esc_status_send(_mavlink->get_channel(), motors_on);
+			//mavlink_msg_uavcan_subak_esc_status_send_struct(_mavlink->get_channel(), &msg);
+			//PX4_ERR("uavcan_esc_update %d: %d, %d, %d, %d", counter, (uint32_t)status.motors_on[0], (uint32_t)status.motors_on[1], (uint32_t)status.motors_on[2], (uint32_t)status.motors_on[3]);
+		} else {
+			mavlink_msg_uavcan_subak_esc_status_send(_mavlink->get_channel(), motors_on);
+			//mavlink_msg_uavcan_subak_esc_status_send_struct(_mavlink->get_channel(), &msg);
+			//PX4_ERR("uavcan_esc_not_update %d: %d, %d, %d, %d", counter, (uint32_t)status.motors_on[0], (uint32_t)status.motors_on[1], (uint32_t)status.motors_on[2], (uint32_t)status.motors_on[3]);
+		}
+		return true;
+	}
+};
+
+// class MavlinkStreamXxxxx : public MavlinkStream
+// {
+// public:
+// 	const char *get_name() const override
+// 	{
+// 		return MavlinkStreamXxxxx::get_name_static();
+// 	}
+
+// 	static constexpr const char *get_name_static()
+// 	{
+// 		return "Xxxxx";
+// 	}
+
+// 	static constexpr uint16_t get_id_static()
+// 	{
+// 		return MAVLINK_MSG_ID_Xxxxx;
+// 	}
+
+// 	uint16_t get_id() override
+// 	{
+// 		return get_id_static();
+// 	}
+
+// 	static MavlinkStream *new_instance(Mavlink *mavlink)
+// 	{
+// 		return new MavlinkStreamXxxxx(mavlink);
+// 	}
+
+// 	unsigned get_size() override
+// 	{
+// 		return 0;	// commands stream is not regular and not predictable
+// 	}
+
+// private:
+
+// 	/* do not allow top copying this class */
+// 	MavlinkStreamXxxxx(MavlinkStreamXxxxx &) = delete;
+// 	MavlinkStreamXxxxx &operator = (const MavlinkStreamXxxxx &) = delete;
+
+// protected:
+// 	explicit MavlinkStreamXxxxx(Mavlink *mavlink) : MavlinkStream(mavlink)
+// 	{}
+
+// 	bool send(const hrt_abstime t) override
+// 	{
+// 		return true;
+// 	}
+// };
 
 static const StreamListItem streams_list[] = {
 	create_stream_list_item<MavlinkStreamHeartbeat>(),
@@ -5512,7 +5656,7 @@ static const StreamListItem streams_list[] = {
 	create_stream_list_item<MavlinkStreamFlightInformation>(),
 	create_stream_list_item<MavlinkStreamStorageInformation>(),
 	create_stream_list_item<MavlinkStreamRawRpm>(),
-	create_stream_list_item<MavlinkStreamUavcanEscStatus>(),
+	create_stream_list_item<MavlinkStreamUavcanSubakEscStatus>(),
 	create_stream_list_item<MavlinkStreamUavcanGnssStatus>(),
 	create_stream_list_item<MavlinkStreamUavcanBatteryStatus>()
 };
